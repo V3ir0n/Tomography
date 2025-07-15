@@ -8,10 +8,13 @@ import {drawParticles} from "./libs/draw.js";
 import {TomographicPlaneGeometry} from "./src/tomographicPlaneGeometry.js";
 import {GLTFLoader} from "./libs/threeAddons/GLTFLoader.js";
 import {GLTFExporter} from "./libs/threeAddons/GLTFExporter.js";
+import {RGBELoader} from './libs/threeAddons/RGBELoader.js';
 import {makePlumeMesh} from "./src/makePlumeMesh.js";
 import {GUI} from "./libs/threeAddons/lil-gui.module.min.js"
 import {Api} from "./src/api.js";
 import {saveArrayBuffer} from "./src/utils.js";
+import {exportDomeVideo} from "./src/domeExport.js";
+
 
 // GUI parameters
 let params	= {
@@ -21,22 +24,20 @@ let params	= {
     plumeVisible: true,
     pointsVisible: true,
     planeVisible: true,
+    backgroundVisible: true,
     imageScaleFactor: 1,
     exportImage: ()=>{window.api.exportImage()}
 };
 
-let camera, scene, renderer, controls;
+let camera, scene, renderer, controls, backgroundTexture;
 let plumeMesh = new THREE.Object3D();
 let frames = [];
-let currentFrame;
 init();
 render();
 
 // configure the raycaster
 const raycaster = new THREE.Raycaster();
 raycaster.params.Points.threshold = 0.001;
-
-
 
 
 // Initialise scene
@@ -60,6 +61,9 @@ function init() {
     const pointLight = new THREE.PointLight(0xff0000, 100);
     pointLight.position.set(1, 1, 1);
     scene.add(pointLight);
+
+    // Setup background
+    setBackgroundVisibility(true);
 
     // Add x-y-z axis indicator
     const axesHelper = new THREE.AxesHelper(5);
@@ -121,6 +125,26 @@ function init() {
     // Update camera aspect ratio on window resize
     window.addEventListener("resize", onWindowResize);
 
+    render();
+}
+
+function setBackgroundVisibility(visible, url="resources/citrus_orchard_road_puresky_4k.hdr") {
+    if (!visible) {
+        scene.background = undefined;
+        scene.environment = undefined;
+    } else {
+        if (backgroundTexture === undefined) {
+            new RGBELoader().load(url, texture => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                backgroundTexture = texture;
+                scene.background = backgroundTexture;
+                scene.environment = backgroundTexture;
+            });
+        } else {
+            scene.background = backgroundTexture;
+            scene.environment = backgroundTexture;
+        }
+    }
     render();
 }
 
@@ -330,7 +354,7 @@ function onDataLoaded(data, processedData) {
     // using tomoInverse
     if (processedData.length === 0) {
         const deg2utm = (lat, long) => {
-            const [x,y] = proj([lat, long]); // TODO this seems wrong. The deg2utm function is much bigger than just dividing by unitsPerMeter! 
+            const [x,y] = proj([lat, long]); // TODO this seems wrong. The deg2utm function is much bigger than just dividing by unitsPerMeter!
             return [x/unitsPerMeter, y/unitsPerMeter];
         };
         processedData = tomoInverse(data, deg2utm);
@@ -430,30 +454,30 @@ function onDataLoaded(data, processedData) {
         scene.add(frameGroup);
         t++;
     }
-    currentFrame = 0;
+    api.currentFrame = 0;
 
     // Velocity in units per millisecond
-    const updateFrame = (steps=20) => {
+    api.updateFrame = (steps=20, automatic=true) => {
         const velocity = (params.assumedVelocity * unitsPerMeter) / 1000;
         frames.forEach((f,i) => {
             // Time difference in milliseconds
-            const dt = processedData[currentFrame].time - processedData[i].time;
+            const dt = processedData[api.currentFrame].time - processedData[i].time;
             const newPos = dir.clone().multiplyScalar(dt * velocity);
             f.position.lerp(newPos, Math.sqrt(1/steps));
-            f.visible = currentFrame >= i;
+            f.visible = api.currentFrame >= i;
         });
-        if (steps > 1) {
+        if (automatic && steps > 1) {
             requestAnimationFrame(()=>{
                 scene.remove(plumeMesh);
                 render();
-                updateFrame(steps-1);
+                api.updateFrame(steps-1);
             });
         } else {
-            setStatus(processedData[currentFrame].time.toLocaleString());
+            setStatus(processedData[api.currentFrame].time.toLocaleString());
             scene.remove(plumeMesh);
             if (params.plumeVisible) {
                 plumeMesh = makePlumeMesh(
-                    processedData, summitPos, velocity, dir, currentFrame,
+                    processedData, summitPos, velocity, dir, api.currentFrame,
                     params.concentrationThreshold, params.maxTimeDiff
                 );
                 scene.add(plumeMesh);
@@ -466,17 +490,18 @@ function onDataLoaded(data, processedData) {
         }
         render();
     };
-    updateFrame();
+    api.updateFrame();
 
     // Setup visualisation parameters
     const gui = new GUI();
-    gui.add(params, 'pointsVisible').onChange(()=>updateFrame());
-    gui.add(params, 'planeVisible').onChange(()=>updateFrame());
+    gui.add(params, 'pointsVisible').onChange(()=>api.updateFrame());
+    gui.add(params, 'planeVisible').onChange(()=>api.updateFrame());
+    gui.add(params, 'backgroundVisible').onChange(e=>setBackgroundVisibility(e));
     const plumeFolder = gui.addFolder('Plume');
-    plumeFolder.add(params, 'plumeVisible').onChange(()=>updateFrame());
-    plumeFolder.add(params, 'assumedVelocity').onChange(()=>updateFrame());
-    plumeFolder.add(params, 'maxTimeDiff').onChange(()=>updateFrame());
-    plumeFolder.add(params, 'concentrationThreshold').min(0).onChange(()=>updateFrame());
+    plumeFolder.add(params, 'plumeVisible').onChange(()=>api.updateFrame());
+    plumeFolder.add(params, 'assumedVelocity').onChange(()=>api.updateFrame());
+    plumeFolder.add(params, 'maxTimeDiff').onChange(()=>api.updateFrame());
+    plumeFolder.add(params, 'concentrationThreshold').min(0).onChange(()=>api.updateFrame());
 
     const exportFolder = gui.addFolder("Export");
     exportFolder.add(params, "imageScaleFactor").min(1);
@@ -489,24 +514,34 @@ function onDataLoaded(data, processedData) {
     window.addEventListener("keydown", (event) => {
         switch (event.code) {
         case "ArrowRight":
-            currentFrame = Math.min(currentFrame+1, frames.length-1);
-            updateFrame();
+            api.currentFrame = Math.min(api.currentFrame+1, frames.length-1);
+            api.updateFrame();
             break;
         case "ArrowLeft":
-            currentFrame = Math.max(currentFrame-1, 0);
-            updateFrame();
+            api.currentFrame = Math.max(api.currentFrame-1, 0);
+            api.updateFrame();
             break;
         }
     });
 
     // Setup buttons
     document.getElementById("prevFrame").onclick = () => {
-        currentFrame = Math.max(currentFrame-1, 0);
-        updateFrame();
+        api.currentFrame = Math.max(api.currentFrame-1, 0);
+        api.updateFrame();
     };
     document.getElementById("nextFrame").onclick = () => {
-        currentFrame = Math.min(currentFrame+1, frames.length-1);
-        updateFrame();
+        api.currentFrame = Math.min(api.currentFrame+1, frames.length-1);
+        api.updateFrame();
+    };
+
+    // Dome export
+    api.exportDomeVideo = (
+        resolution=800, duration=5, revolutionTime = 30, framerate=60, eyeSep=0.064, tilt=27, span=165,
+    ) => {
+        exportDomeVideo(
+            resolution, duration, revolutionTime, framerate, eyeSep, tilt, span, renderer, scene,
+            summitPos, unitsPerMeter, processedData.length, api
+        )
     };
 
 }
