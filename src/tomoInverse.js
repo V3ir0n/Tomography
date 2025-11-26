@@ -1,19 +1,6 @@
 import {locateVolcano} from "./locateVolcano.js";
 import {loadPyodide} from "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.mjs";
 
-
-// Setup pyodide
-const pyodide = await loadPyodide();
-
-// Load numpy
-await pyodide.loadPackage("micropip");
-const micropip = pyodide.pyimport("micropip");
-await micropip.install("numpy");
-await micropip.install("scipy");
-
-// Hide progress bar
-document.getElementById("progress").style.display = "none";
-
 /**
  * Tomographic inversion. Retrieve concentration profiles of plumes from measured scans
  * @param {*[][]} data
@@ -22,13 +9,29 @@ document.getElementById("progress").style.display = "none";
  * @param {number} baricenterLimit Angle of centre of mass, between 0 and 75
  * @param {number} timeDifferenceMin Difference in time between scans in minutes
  */
-function tomoInverse(
+async function tomoInverse(
     data,
     deg2utm,
     completenessLimit,
     baricenterLimit,
     timeDifferenceMin,
 ) {
+
+        // Hide progress bar
+    document.getElementById("progress").style.display = "block";
+
+    // Setup pyodide
+    const pyodide = await loadPyodide();
+
+    // Load numpy
+    await pyodide.loadPackage("micropip");
+    const micropip = pyodide.pyimport("micropip");
+    await micropip.install("numpy");
+    await micropip.install("scipy");
+
+    // Hide progress bar
+    document.getElementById("progress").style.display = "none";
+
     if (completenessLimit === undefined) {
         completenessLimit = document.getElementById("completenessLimit").valueAsNumber;
     }

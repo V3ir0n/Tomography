@@ -312,7 +312,7 @@ function parseScans(text) {
  * @param {any[]} data Evaluation log data
  * @param {any[]} processedData (optional) Already processed concentration data
  */
-function onDataLoaded(data, processedData) {
+async function onDataLoaded(data, processedData) {
     console.log(data);
 
     let tgeo = new ThreeGeo();
@@ -415,7 +415,7 @@ function onDataLoaded(data, processedData) {
             const [x,y] = proj([lat, long]); // TODO this seems wrong. The deg2utm function is much bigger than just dividing by unitsPerMeter!
             return [x/unitsPerMeter, y/unitsPerMeter];
         };
-        processedData = tomoInverse(data, deg2utm);
+        processedData = await tomoInverse(data, deg2utm);
         for (const frame of processedData) {
             frame.coordinates = frame.points.map(d=>new THREE.Vector3(
                 d.latPutm * unitsPerMeter,
