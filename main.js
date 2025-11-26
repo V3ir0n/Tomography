@@ -109,6 +109,30 @@ function init() {
 
     fileInput.onchange = loadFromFiles;
 
+    document.getElementById("sabancayaExample").onclick = () => {
+        loadDataFromUrl([
+            "matlab/sabancaya/EvaluationLog_D2J2819_2024.01.28.txt",
+            "matlab/sabancaya/EvaluationLog_D2J2833_2024.01.28.txt",
+            "matlab/sabancaya/tomography_D2J2819_20240128_1213_D2J2833_20240128_1200.csv",
+            "matlab/sabancaya/tomography_D2J2819_20240128_1213_D2J2833_20240128_1215.csv",
+            "matlab/sabancaya/tomography_D2J2819_20240128_1230_D2J2833_20240128_1215.csv"
+        ]);
+    };
+
+    document.getElementById("turrialbaExample").onclick = () => {
+        loadDataFromUrl([
+            "matlab/turrialba/EvaluationLog_Turrialba_1.txt",
+            "matlab/turrialba/EvaluationLog_Turrialba_2.txt",
+            "matlab/turrialba/tomography_2108111M1_20231013_1413_D2J3042_20231013_1422.csv",
+            "matlab/turrialba/tomography_2108111M1_20231013_1433_D2J3042_20231013_1422.csv",
+            "matlab/turrialba/tomography_2108111M1_20231015_1433_D2J3042_20231015_1423.csv",
+            "matlab/turrialba/tomography_2108111M1_20231013_1427_D2J3042_20231013_1422.csv",
+            "matlab/turrialba/tomography_2108111M1_20231015_1423_D2J3042_20231015_1423.csv",
+            "matlab/turrialba/tomography_2108111M1_20231026_1436_D2J3042_20231026_1441.csv"
+        ]);
+    };
+
+
     // Firefox might cashe the last files selected,
     // so this is a shorthand to press Enter to
     // load the directly.
@@ -126,6 +150,40 @@ function init() {
     window.addEventListener("resize", onWindowResize);
 
     render();
+}
+
+async function loadDataFromUrl(filePaths) {
+        const data = [];
+        let alreadyProcessedData = [];
+        for (const path of filePaths) {
+            // Load text from path
+            const res = await fetch(path);
+            const text = await res.text();
+
+            const filename = path.split("/").splice(-1)[0];
+
+            // We might have multiple dots in the name
+            const splitName = filename.split(".");
+            const suffix = splitName.pop();
+            if (suffix === "csv") {
+                // CSV means we have data from matlab
+                const frame = parseProcessedData(text, filename);
+                alreadyProcessedData.push(frame);
+            } else {
+                // Otherwise we should have the txt evaluation logs
+                const scans = parseScans(text);
+                data.push(scans);
+            }
+        }
+        // Hide file upload container
+        document.getElementById("fileUploadContainer").style.display = "none";
+
+        // Create api and make it a global variable in the web console
+        window.api = new Api(camera, scene, renderer, controls, data, params);
+        window.THREE = THREE;
+
+        // Handle the loaded data
+        onDataLoaded(data, alreadyProcessedData);
 }
 
 function setBackgroundVisibility(visible, url="resources/citrus_orchard_road_puresky_4k.hdr") {
