@@ -1,5 +1,4 @@
 import {locateVolcano} from "./locateVolcano.js";
-import {mldivider} from "./mldivider.js";
 import {loadPyodide} from "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.mjs";
 
 
@@ -295,9 +294,6 @@ function tomoInverse(
                 Matrix.subset(math.index(math.range(3, end[0]), end[1]-1), 0);
 
                 // Calculate the concentration profile
-                //let Concentration = math.divide(Cols, Matrix);
-                //let Concentration = mldivider(Cols, Matrix);
-
 
                 pyodide.globals.set("cols", new Float64Array(Cols.toArray().map(v=>[v])));
                 pyodide.globals.set("matrix", Matrix.toArray().map(l=>new Float64Array(l)));
@@ -318,6 +314,7 @@ function tomoInverse(
 
                      print(concentration)
 
+                     # Multiply to make sure we get the matrix again
                      print("Check")
                      check = m @ concentration
                      print(check)
@@ -325,7 +322,6 @@ function tomoInverse(
                      print(c - check)
                 `);
 
-                // Try to multiply to get matrix again
 
                 // Extract the result
                 let Concentration = [...pyodide.globals.get('concentration').toJs()];

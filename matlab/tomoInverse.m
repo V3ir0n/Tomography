@@ -269,7 +269,7 @@ for i = 1:length(indexValid(1,valid1))
             valueLeft2 = posWidth2(wLeft2);
             wRight2 = min(find((posWidth2-posMax2)>0));
             valueRight2 = posWidth2(wRight2);
-            
+
             %plumeD = abs(abs(compass1)-abs(angleV1));
 
             ind1 = find(SB1>max(SB1)/exp(1));
@@ -324,7 +324,7 @@ for i = 1:length(indexValid(1,valid1))
 
             % the concentration profile is calculated here
             Concentration = Cols\Matrix;
-            
+
             negatives = find(Concentration<0);
             Concentration(negatives) = 0;
 
@@ -349,7 +349,7 @@ for i = 1:length(indexValid(1,valid1))
                     PosY(r) = PosX(r)/tand(abs(meanAlpha1(m)));
                 end
             end
-            
+
             % plume parameters
             meanPosX = sum(PosX.*Concentration')/sum(Concentration);
             meanPosY = sum(PosY.*Concentration')/sum(Concentration);
@@ -368,8 +368,8 @@ for i = 1:length(indexValid(1,valid1))
             resultsFile = strcat(subdirectory,'tomography_',serial{1,1},'_',datestr(indScansTimeValid{1,indexValid(1,valid1(i))}(1),'yyyymmdd_HHMM'),'_',serial{2,1},'_',datestr(indScansTimeValid{2,indexValid(2,valid2(j))}(1),'yyyymmdd_HHMM'),'.csv');
             writematrix([length(ind1)-1, length(ind2)-1], resultsFile);
             writematrix([lon lat altP Concentration'], resultsFile, 'WriteMode','append');
-            resultsSummaryFile = strcat(subdirectory,'summary_',serial{1,1},'_',datestr(indScansTimeValid{1,indexValid(1,valid1(1))}(1),'yyyymmdd_HHMM'),'_',serial{2,1},'_',datestr(indScansTimeValid{2,indexValid(2,valid2(end))}(1),'yyyymmdd_HHMM'),'.csv');
-            writematrix([round(year(plumeTime)) round(month(plumeTime)) round(day(plumeTime)) round(hour(plumeTime)) round(minute(plumeTime)) round(plumeH(k)) round(plumeDirection(k))],resultsSummaryFile,'WriteMode','append');
+            % resultsSummaryFile = strcat(subdirectory,'summary_',serial{1,1},'_',datestr(indScansTimeValid{1,indexValid(1,valid1(1))}(1),'yyyymmdd_HHMM'),'_',serial{2,1},'_',datestr(indScansTimeValid{2,indexValid(2,valid2(end))}(1),'yyyymmdd_HHMM'),'.csv');
+            % writematrix([round(year(plumeTime)) round(month(plumeTime)) round(day(plumeTime)) round(hour(plumeTime)) round(minute(plumeTime)) round(plumeH(k)) round(plumeDirection(k))],resultsSummaryFile,'WriteMode','append');
 
             % plots
             if plots>0
@@ -396,7 +396,7 @@ for i = 1:length(indexValid(1,valid1))
                 clear ind1;
                 clear ind2;
                 clear Matrix;
-                clear Cols;                
+                clear Cols;
             end
         end
     end
