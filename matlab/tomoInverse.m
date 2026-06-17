@@ -277,6 +277,9 @@ for i = 1:length(indexValid(1,valid1))
             Matrix = zeros(2*((length(ind1)-1)+(length(ind2)-1)),(length(ind1)-1)*(length(ind2)-1));
             Cols = zeros(2*((length(ind1)-1)+(length(ind2)-1)),1);
 
+
+
+%--------------------------------------------------------------------------------------------------------------
             % here starts the tomographic inversion using the
             % low-third-derivative method.
             for m = 1:length(ind1)-1
@@ -370,7 +373,6 @@ for i = 1:length(indexValid(1,valid1))
             writematrix([lon lat altP Concentration'], resultsFile, 'WriteMode','append');
             % resultsSummaryFile = strcat(subdirectory,'summary_',serial{1,1},'_',datestr(indScansTimeValid{1,indexValid(1,valid1(1))}(1),'yyyymmdd_HHMM'),'_',serial{2,1},'_',datestr(indScansTimeValid{2,indexValid(2,valid2(end))}(1),'yyyymmdd_HHMM'),'.csv');
             % writematrix([round(year(plumeTime)) round(month(plumeTime)) round(day(plumeTime)) round(hour(plumeTime)) round(minute(plumeTime)) round(plumeH(k)) round(plumeDirection(k))],resultsSummaryFile,'WriteMode','append');
-
             % plots
             if plots>0
                 figure;

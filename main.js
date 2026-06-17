@@ -2,7 +2,8 @@ import * as THREE from "three";
 import {MapControls} from "./libs/threeAddons/MapControls.js";
 import {Lut} from "./libs/threeAddons/Lut.js";
 import ThreeGeo from "./libs/three-geo-esm.js";
-import {tomoInverse} from "./src/tomoInverse.js";
+//import {tomoInverse} from "./src/tomoInverse.js";
+import {tomoInverse} from "./src/volcanoTomography.js";
 import {locateVolcano} from "./src/locateVolcano.js";
 import {drawParticles} from "./libs/draw.js";
 import {TomographicPlaneGeometry} from "./src/tomographicPlaneGeometry.js";
@@ -313,7 +314,12 @@ function parseScans(text) {
  * @param {any[]} processedData (optional) Already processed concentration data
  */
 async function onDataLoaded(data, processedData) {
-    console.log(data);
+    console.log(`onDataLoaded: ${data.length} TXT file(s), ${processedData.length} CSV file(s)`, data);
+
+    if (data.length < 2) {
+        alert(`Need at least 2 EvaluationLog .txt files (one per instrument). Got ${data.length}.\nCSV files go into pre-processed data — make sure you also upload the .txt files.`);
+        return;
+    }
 
     let tgeo = new ThreeGeo();
 
@@ -417,11 +423,12 @@ async function onDataLoaded(data, processedData) {
         };
         processedData = await tomoInverse(data, deg2utm);
         for (const frame of processedData) {
+            // deg2utm returns [proj()[0], proj()[1]] / unitsPerMeter
+            // proj()[0] → Three.js X,  proj()[1] → Three.js -Z  (same sign flip as toSceneCoords)
             frame.coordinates = frame.points.map(d=>new THREE.Vector3(
                 d.latPutm * unitsPerMeter,
                 d.altP * unitsPerMeter,
-                d.lonPutm * unitsPerMeter,
-                proj
+                -d.lonPutm * unitsPerMeter
             ));
         }
 
@@ -462,17 +469,22 @@ async function onDataLoaded(data, processedData) {
             lut.maxV++;
         }
 
-        const colors = concentrations.map(c=>{
-            const color = lut.getColor(c);
-            return color;
-        });
-        const ps = frame.coordinates;
+        // Particles: only show cells above 1 % of peak so ghost edge-cells are hidden
+        const threshold = lut.maxV * 0.01;
+        const mask = concentrations.map(c => c > threshold);
+        const visibleConc   = concentrations.filter((_, i) => mask[i]);
+        const visibleCoords = frame.coordinates.filter((_, i) => mask[i]);
+        const colors = visibleConc.map(c => lut.getColor(c));
 
-        // Particles
-        const pointMesh = drawParticles(ps, colors, [{
+        if (t === 0) {
+            console.log(`Frame 0: ${concentrations.length} cells, conc [${Math.min(...concentrations).toExponential(2)}, ${Math.max(...concentrations).toExponential(2)}], threshold ${threshold.toExponential(2)}, visible cells: ${visibleCoords.length}`);
+            if (frame.coordinates[0]) console.log('Frame 0 first coord:', frame.coordinates[0]);
+        }
+
+        const pointMesh = drawParticles(visibleCoords, colors, [{
             name: "concentration",
             itemSize: 1,
-            flattenedItems: concentrations
+            flattenedItems: visibleConc
         }], 0.005);
 
         window.addEventListener("mousemove", event => {
@@ -502,7 +514,8 @@ async function onDataLoaded(data, processedData) {
             transparent: true
         });
 
-        const planeGeometry = new TomographicPlaneGeometry(ps, dir, frame.size1-1, frame.size2-1);
+        // Plane needs ALL coordinates in grid order — do not use the filtered set
+        const planeGeometry = new TomographicPlaneGeometry(frame.coordinates, dir, frame.size1-1, frame.size2-1);
         const planeMesh = new THREE.Mesh(planeGeometry, material);
 
         const frameGroup = new THREE.Group();
@@ -516,6 +529,7 @@ async function onDataLoaded(data, processedData) {
 
     // Velocity in units per millisecond
     api.updateFrame = (steps=20, automatic=true) => {
+        if (processedData.length === 0) return;
         const velocity = (params.assumedVelocity * unitsPerMeter) / 1000;
         frames.forEach((f,i) => {
             // Time difference in milliseconds
@@ -643,14 +657,16 @@ function generateTexture(data, height, width) {
     const lut = new Lut("ylOrRd", 512);
     lut.minV = Math.min(...data);
     lut.maxV = Math.max(...data);
+    if (lut.maxV <= lut.minV) lut.maxV = lut.minV + 1; // avoid 0/0 and out-of-bounds index
 
     for (let i = 0, j = 0, l = imageData.length; i < l; i += 4, j++) {
         const color = lut.getColor(data[j]);
         imageData[i] = color.r * 255;       // R
         imageData[i + 1] = color.g * 255;   // G
         imageData[i + 2] = color.b * 255;   // B
-        // Also make plane opacity depend on concentration data
-        imageData[i + 3] = (data[j]/lut.maxV) * 255 * 0.75;   // A
+        // 4th-power alpha: only the brightest 30% of cells are clearly visible
+        const rel = data[j] / lut.maxV;
+        imageData[i + 3] = rel * rel * rel * rel * 255;   // A
     }
 
     context.putImageData(image, 0, 0);
