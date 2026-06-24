@@ -10,9 +10,9 @@ class VolcanoTomography {
     this.numberOffset = parameters.numberOffset || 5;
     this.volcanoList = parameters.volcanoList || {};
     this.plots = parameters.plots || 0;
-    // Tikhonov regularization strength relative to mean path length.
-    // Increase if the solution is noisy; decrease if over-smoothed.
-    this.regularizationParam = parameters.regularizationParam ?? 0.01;
+    // MLEM iteration count. More iterations → tighter data fit (ratios closer to 1)
+    // but may amplify noise in sparse regions. 50 is a good starting point.
+    this.mlemIterations = parameters.mlemIterations ?? 50;
   }
   // ==========================================================================
   // DATA HANDLING
@@ -407,12 +407,12 @@ class VolcanoTomography {
     const nRows1 = ind1.length - 1; // 4 selected angles → 3 bands
     const nRows2 = ind2.length - 1;
 
-    // Measured SCD at each angle band (ppm·m)
-    // b1[m] = representative SCD for band m (ppm·m)
+    // Measured SCD per band in the baseline-projected frame (ppm·m).
+    // Must use SB1/SB2 — same coordinate frame as the path lengths in computeExactPathLengths.
     const b1 = new Array(nRows1);
-    for (let m = 0; m < nRows1; m++) b1[m] = 0.5 * (S1[ind1[m]] + S1[ind1[m + 1]]);
+    for (let m = 0; m < nRows1; m++) b1[m] = 0.5 * (SB1[ind1[m]] + SB1[ind1[m + 1]]);
     const b2 = new Array(nRows2);
-    for (let n = 0; n < nRows2; n++) b2[n] = 0.5 * (S2[ind2[n]] + S2[ind2[n + 1]]);
+    for (let n = 0; n < nRows2; n++) b2[n] = 0.5 * (SB2[ind2[n]] + SB2[ind2[n + 1]]);
 
     // Exact path lengths — named pL1/pL2 to avoid collision with the
     // baseline-projection scalars L1/L2 defined above (lines 367-368).
@@ -420,51 +420,23 @@ class VolcanoTomography {
       nRows1, nRows2, ind1, ind2, alphaB1, alphaB2, S12, deltaH21
     );
 
-    // Reconstruction: normalized outer product in concentration space.
-    //
-    // The system has nRows1*nRows2 unknowns but only nRows1+nRows2 measurements,
-    // so it is massively underdetermined.  An unconstrained least-squares solve
-    // produces large oscillating positive/negative values; clamping negatives to
-    // zero then leaves edge peaks and a zero center — the unphysical artifact.
-    //
-    // The rank-1 reconstruction avoids this: for each station compute the average
-    // concentration along each ray (SCD / total path through all cells on that ray),
-    // then take the geometric mean from both stations.  This guarantees
-    // non-negativity, correct ppm units, and concentrates gas where both stations
-    // simultaneously see high SCD.
-    //
-    //   c1[m] = b1[m] / Σ_n pL1[m,n]   (ppm from station-1 ray m)
-    //   c2[n] = b2[n] / Σ_m pL2[m,n]   (ppm from station-2 ray n)
-    //   c[m,n] = √(c1[m] · c2[n])       (geometric mean, ppm, always ≥ 0)
+    // Solve A·x = b_meas with Tikhonov regularization.
+    // Row m (0…nRows1-1): station 1 ray m — Σ_n c[m,n]·L1[m,n] = b1[m]
+    // Row nRows1+n:        station 2 ray n — Σ_m c[m,n]·L2[m,n] = b2[n]
+    const nCells = nRows1 * nRows2;
+    const A = Array.from({ length: nRows1 + nRows2 }, () => new Array(nCells).fill(0));
+    const bVec = new Array(nRows1 + nRows2);
 
-    const c1 = new Array(nRows1);
-    const totL1 = new Array(nRows1);
     for (let m = 0; m < nRows1; m++) {
-      let totL = 0;
-      for (let n = 0; n < nRows2; n++) totL += pL1[m * nRows2 + n];
-      totL1[m] = totL;
-      c1[m] = totL > 0 ? Math.max(0, b1[m]) / totL : 0;
+      bVec[m] = b1[m];
+      for (let n = 0; n < nRows2; n++) A[m][m * nRows2 + n] = pL1[m * nRows2 + n];
     }
-
-    const c2 = new Array(nRows2);
-    const totL2 = new Array(nRows2);
     for (let n = 0; n < nRows2; n++) {
-      let totL = 0;
-      for (let m = 0; m < nRows1; m++) totL += pL2[m * nRows2 + n];
-      totL2[n] = totL;
-      c2[n] = totL > 0 ? Math.max(0, b2[n]) / totL : 0;
+      bVec[nRows1 + n] = b2[n];
+      for (let m = 0; m < nRows1; m++) A[nRows1 + n][m * nRows2 + n] = pL2[m * nRows2 + n];
     }
 
-    const concentration = new Array(nRows1 * nRows2);
-    for (let m = 0; m < nRows1; m++) {
-      for (let n = 0; n < nRows2; n++) {
-        concentration[m * nRows2 + n] = Math.sqrt(c1[m] * c2[n]);
-      }
-    }
-/*
-    // Log single-station concentrations so you can verify the scale and shape.
-    console.log('[Tomo] c1 per band (ppm):', c1.map(v => v.toFixed(4)));
-    console.log('[Tomo] c2 per band (ppm):', c2.map(v => v.toFixed(4))); */
+    const concentration = this.solveMlem(A, bVec);
 
     // Calculate positions using corrected angles
     const positions = this.calculatePositions(
@@ -472,7 +444,7 @@ class VolcanoTomography {
       S12, deltaH21, latVol, lonVol, altS1, utm1, utm2, utmVol
     );
 
-    const validation = this.validateReconstruction(concentration, nRows1, nRows2, b1, b2, pL1, pL2, c1, c2, totL1, totL2);
+    const validation = this.validateReconstruction(concentration, nRows1, nRows2, b1, b2, pL1, pL2);
 
     return {
       concentration,
@@ -544,92 +516,82 @@ class VolcanoTomography {
    * forward2[n] = Σ_m concentration[m,n] * L2[m,n]  should equal b2[n]
    * ratio ≈ 1 means the reconstruction is self-consistent.
    */
-  validateReconstruction(concentration, nRows1, nRows2, b1, b2, L1, L2, c1, c2, totL1, totL2) {
+  validateReconstruction(concentration, nRows1, nRows2, b1, b2, L1, L2) {
     const forward1 = new Array(nRows1).fill(0);
     const forward2 = new Array(nRows2).fill(0);
+    const totL1    = new Array(nRows1).fill(0);
+    const totL2    = new Array(nRows2).fill(0);
 
     for (let m = 0; m < nRows1; m++) {
       for (let n = 0; n < nRows2; n++) {
         forward1[m] += concentration[m * nRows2 + n] * L1[m * nRows2 + n];
         forward2[n] += concentration[m * nRows2 + n] * L2[m * nRows2 + n];
+        totL1[m]    += L1[m * nRows2 + n];
+        totL2[n]    += L2[m * nRows2 + n];
       }
     }
 
-    const ratio1 = b1.map((s, m) => Math.abs(s) > 1e-10 ? forward1[m] / s : NaN);
-    const ratio2 = b2.map((s, n) => Math.abs(s) > 1e-10 ? forward2[n] / s : NaN);
+    const ratio1    = b1.map((s, m) => Math.abs(s) > 1e-10 ? forward1[m] / s : NaN);
+    const ratio2    = b2.map((s, n) => Math.abs(s) > 1e-10 ? forward2[n] / s : NaN);
+    const avgConc1  = forward1.map((f, m) => totL1[m] > 0 ? f / totL1[m] : 0);
+    const avgConc2  = forward2.map((f, n) => totL2[n] > 0 ? f / totL2[n] : 0);
 
-    return { forward1, forward2, ratio1, ratio2, b1: [...b1], b2: [...b2], c1, c2, totL1, totL2 };
+    return { forward1, forward2, ratio1, ratio2, b1: [...b1], b2: [...b2],
+             totL1, totL2, avgConc1, avgConc2 };
   }
   //========================================================================================================
-
+// TOMOGRAPHY ALGORITHM
   /**
-   * Solve the over-determined system A·x = b in the least-squares sense via
-   * the normal equations  (AᵀA)·x = Aᵀb,  solved with Gaussian elimination.
-   * A is (nMeas × nCells), b is length-nMeas; returns length-nCells vector x.
+   * MLEM (Maximum Likelihood Expectation Maximization) for emission tomography.
+   *
+   * Linear inversion (Tikhonov / least-squares) requires a non-negativity clamp
+   * after solving.  That clamp breaks the data constraint (Ax = b), which is why
+   * ratios blow up.  MLEM avoids this entirely: the multiplicative update keeps
+   * all values strictly positive by construction, and at convergence Ax[i] = b[i]
+   * exactly, so ratios → 1.
+   *
+   * Update rule:  x[j] ← x[j] / s[j]  ×  Σᵢ A[i][j] · b[i] / (Ax)[i]
+   * where s[j] = Σᵢ A[i][j]  (sensitivity: total path through cell j).
+   * At the fixed point every ratio b[i]/(Ax)[i] = 1, so the correction is 1.
+   *
+   * mlemIterations controls how tightly the measurements are fitted.
+   * More iterations → ratios closer to 1 but may amplify noise in sparse cells.
    */
-  solveLeastSquares(A, b) {
+  solveMlem(A, b) {
     const nMeas  = A.length;
     const nCells = A[0].length;
+    const nIter  = this.mlemIterations;
 
-    // Build AᵀA (nCells×nCells) and Aᵀb (nCells) directly.
-    const ATA = Array.from({ length: nCells }, () => new Array(nCells).fill(0));
-    const ATb = new Array(nCells).fill(0);
+    // Sensitivity: s[j] = Σᵢ A[i][j]
+    const s = new Array(nCells).fill(0);
+    for (let i = 0; i < nMeas; i++)
+      for (let k = 0; k < nCells; k++)
+        s[k] += A[i][k];
 
-    for (let i = 0; i < nMeas; i++) {
-      for (let j = 0; j < nCells; j++) {
-        if (A[i][j] === 0) continue;
-        ATb[j] += A[i][j] * b[i];
-        for (let k = j; k < nCells; k++) {
-          const v = A[i][j] * A[i][k];
-          ATA[j][k] += v;
-          if (k !== j) ATA[k][j] += v;
-        }
+    // Uniform initialisation: mean(b)/mean(s) so the first forward projection ≈ b
+    const meanB = b.reduce((a, v) => a + v, 0) / nMeas;
+    const meanS = s.reduce((a, v) => a + v, 0) / nCells;
+    const x = new Array(nCells).fill(meanS > 0 ? meanB / meanS : 1e-9);
+
+    for (let iter = 0; iter < nIter; iter++) {
+      // Forward projection: (Ax)[i] = Σ_k A[i][k] · x[k]
+      const Ax = new Array(nMeas).fill(0);
+      for (let i = 0; i < nMeas; i++)
+        for (let k = 0; k < nCells; k++)
+          Ax[i] += A[i][k] * x[k];
+
+      // Back-project the ratio b / Ax
+      const bp = new Array(nCells).fill(0);
+      for (let i = 0; i < nMeas; i++) {
+        if (Ax[i] < 1e-30) continue;
+        const r = b[i] / Ax[i];
+        for (let k = 0; k < nCells; k++)
+          bp[k] += A[i][k] * r;
       }
-    }
 
-    // Small ridge to guarantee invertibility when the system is near-singular.
-    const diagMax = Math.max(...ATA.map((row, i) => row[i]));
-    const ridge   = 1e-10 * (diagMax > 0 ? diagMax : 1);
-    for (let j = 0; j < nCells; j++) ATA[j][j] += ridge;
-
-    return this.gaussianElimination(ATA, ATb);
-  }
-
-  /**
-   * Gaussian elimination solver
-   */
-  gaussianElimination(A, b) {
-    const n = A.length;
-    const aug = A.map((row, i) => [...row, b[i]]);
-
-    // Forward elimination
-    for (let i = 0; i < n; i++) {
-      // Find pivot
-      let maxRow = i;
-      for (let k = i + 1; k < n; k++) {
-        if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) {
-          maxRow = k;
-        }
-      }
-      [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
-
-      // Make zeros below
-      for (let k = i + 1; k < n; k++) {
-        const factor = aug[k][i] / aug[i][i];
-        for (let j = i; j <= n; j++) {
-          aug[k][j] -= factor * aug[i][j];
-        }
-      }
-    }
-
-    // Back substitution
-    const x = new Array(n);
-    for (let i = n - 1; i >= 0; i--) {
-      x[i] = aug[i][n];
-      for (let j = i + 1; j < n; j++) {
-        x[i] -= aug[i][j] * x[j];
-      }
-      x[i] /= aug[i][i];
+      // Multiplicative update
+      for (let k = 0; k < nCells; k++)
+        if (s[k] > 0) x[k] *= bp[k] / s[k];
     }
 
     return x;
@@ -688,27 +650,6 @@ class VolcanoTomography {
   }
 
   /**
-   * Matrix utilities
-   */
-  matrixMultiply(A, B) {
-    const result = [];
-    for (let i = 0; i < A.length; i++) {
-      result[i] = [];
-      for (let j = 0; j < B[0].length; j++) {
-        result[i][j] = 0;
-        for (let k = 0; k < B.length; k++) {
-          result[i][j] += A[i][k] * B[k][j];
-        }
-      }
-    }
-    return result;
-  }
-
-  transpose(A) {
-    return A[0].map((_, i) => A.map(row => row[i]));
-  }
-
-  /**
    * Time parsing (simple format)
    */
   parseTime(dateStr) {
@@ -733,7 +674,8 @@ export async function tomoInverse(data, deg2utm) {
     const timeDifferenceMin = document.getElementById("timeDifferenceMin")?.valueAsNumber ?? 15;
     const timeDifference    = timeDifferenceMin * 60 * 1000;
 
-    const tomo = new VolcanoTomography({ completenessLimit, baricenterLimit, timeDifferenceMin });
+    const mlemIterations = document.getElementById("mlemIterations")?.valueAsNumber ?? 50;
+    const tomo = new VolcanoTomography({ completenessLimit, baricenterLimit, timeDifferenceMin, mlemIterations });
 
     // Convert raw scan data to the format VolcanoTomography expects, computing
     // plumeCentre and plumeCompleteness needed by filterValidScans.
@@ -832,20 +774,20 @@ export async function tomoInverse(data, deg2utm) {
                 // Log validation for the very first frame: SCD = concentration × path
                 if (frames.length === 0 && result.validation) {
                     const { forward1, b1: vb1, ratio1, forward2, b2: vb2, ratio2,
-                            c1, c2, totL1, totL2 } = result.validation;
+                            totL1, totL2, avgConc1, avgConc2 } = result.validation;
                     const fmt = x => isNaN(x) ? NaN : parseFloat(x.toFixed(4));
                     const toRows = (b, conc, path, fwd, ratio) => b.map((_, i) => ({
-                        'SCD measured (ppm·m)':  fmt(b[i]),
-                        'concentration (ppm)':   fmt(conc[i]),
-                        'path (m)':              fmt(path[i]),
-                        'conc × path (ppm·m)':   fmt(fwd[i]),
-                        'ratio (expect ~1)':      fmt(ratio[i]),
+                        'SCD measured (ppm·m)':   fmt(b[i]),
+                        'avg conc (ppm)':          fmt(conc[i]),
+                        'total path (m)':          fmt(path[i]),
+                        'SCD reproduced (ppm·m)': fmt(fwd[i]),
+                        'ratio (expect ~1)':       fmt(ratio[i]),
                     }));
                     console.group('[Tomography validation] SCD = concentration × path');
                     console.log('Station 1');
-                    console.table(toRows(vb1, c1, totL1, forward1, ratio1));
+                    console.table(toRows(vb1, avgConc1, totL1, forward1, ratio1));
                     console.log('Station 2');
-                    console.table(toRows(vb2, c2, totL2, forward2, ratio2));
+                    console.table(toRows(vb2, avgConc2, totL2, forward2, ratio2));
                     console.groupEnd();
                 }
 
