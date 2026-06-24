@@ -1,13 +1,5 @@
 import { locateVolcano } from "./locateVolcano.js";
-
-/**
- * Volcanic SO2 Tomography Analysis
- * Complete JavaScript conversion of MATLAB InfraVis Volcanic Clouds code
- *
- * Usage:
- *   const result = new VolcanoTomography(parameters);
- *   const csv = result.processTwoStations(txt1Content, txt2Content);
- */
+import { volcanoList } from "./volcanoList.js";
 
 class VolcanoTomography {
   constructor(parameters = {}) {
@@ -18,7 +10,12 @@ class VolcanoTomography {
     this.numberOffset = parameters.numberOffset || 5;
     this.volcanoList = parameters.volcanoList || {};
     this.plots = parameters.plots || 0;
+    // Tikhonov regularization strength relative to mean path length.
+    // Increase if the solution is noisy; decrease if over-smoothed.
+    this.regularizationParam = parameters.regularizationParam ?? 0.01;
   }
+  // ==========================================================================
+  // DATA HANDLING
 
   /**
    * Parse EvaluationLog format from text file
@@ -27,7 +24,7 @@ class VolcanoTomography {
     const scans = [];
     
     // Extract scan information blocks
-    const scanPattern = /<scaninformation>[\s\S]*?<\/spectraldata>/g;
+    const scanPattern = /<scaninformation>[\s\S]*?<\/spectraldata>/g; //regex to match each scan block with spectral data
     const scanMatches = fileContent.match(scanPattern) || [];
 
     scanMatches.forEach(scanBlock => {
@@ -108,7 +105,7 @@ class VolcanoTomography {
     lines.forEach(line => {
       const parts = line.trim().split(/\s+/);
       if (parts.length >= 12) {
-        data.angles.push(parseFloat(parts[0]));
+        data.angles.push(parseFloat(parts[0])); //add angle value to the angles array
         data.so2Columns.push(parseFloat(parts[11])); // Column SO2
         data.so2Errors.push(parseFloat(parts[12]));  // Error
         data.flags.push(parseInt(parts[29]) || 0);   // Flag
@@ -189,6 +186,8 @@ class VolcanoTomography {
     return { lat: this.toDeg(lat), lon: this.toDeg(lon) };
   }
 
+  //======================================================================================
+  // PREPARE VARIABLES & CALL TOMOGRAPHY (Algorithm further down)
   /**
    * Process two station files and return tomography results
    */
@@ -217,8 +216,16 @@ class VolcanoTomography {
     // Convert to UTM
     const utm1 = this.deg2utm(latS1, lonS1);
     const utm2 = this.deg2utm(latS2, lonS2);
-    const latVol = parseFloat(s1.latitude);
-    const lonVol = parseFloat(s1.longitude);
+    const volName = s1.volcano ? s1.volcano.toLowerCase() : null; // volcano name from station 1 (if available)
+    let volEntry = volName ? volcanoList.find(v => v.volcano === volName) : null;
+    if (!volEntry) {
+      // Proximity fallback: closest by lat from s1, lon from s2 (mirrors locateVolcano.js)
+      const iLat = volcanoList.reduce((best, v, i) => Math.abs(latS1 - v.lat) < Math.abs(latS1 - volcanoList[best].lat) ? i : best, 0);
+      const iLon = volcanoList.reduce((best, v, i) => Math.abs(lonS2 - v.lon) < Math.abs(lonS2 - volcanoList[best].lon) ? i : best, 0);
+      volEntry = volcanoList[iLat === iLon ? iLat : iLat];
+    }
+    const latVol = volEntry.lat;
+    const lonVol = volEntry.lon;
     const utmVol = this.deg2utm(latVol, lonVol);
 
     const DX1 = utm1.easting - utmVol.easting;
@@ -226,17 +233,12 @@ class VolcanoTomography {
     const DX2 = utm2.easting - utmVol.easting;
     const DY2 = utm2.northing - utmVol.northing;
 
-    const beta1 = s1.coneAngle;
-    const beta2 = s2.coneAngle;
-    const deltaH21 = altS2 - altS1;
+    const beta1 = s1.coneAngle;   // scan cone  for station 1
+    const beta2 = s2.coneAngle;   // scan cone for station 2
+    const deltaH21 = altS2 - altS1; // altitude difference between stations
 
-    // Geometric calculations
-    const VS1 = Math.sqrt(DX1 ** 2 + DY1 ** 2);
-    const VS2 = Math.sqrt(DX2 ** 2 + DY2 ** 2);
-    const S12 = Math.sqrt((DX1 - DX2) ** 2 + (DY1 - DY2) ** 2);
 
-    const cosAngleV = (VS1 ** 2 + VS2 ** 2 - S12 ** 2) / (2 * VS1 * VS2);
-    const angleV = Math.acos(Math.min(1, Math.max(-1, cosAngleV)));
+    const S12 = Math.sqrt((DX1-DX2)**2 + (DY1-DY2)**2); // distance between the two stations
 
     // Filter valid scans
     const validScans1 = this.filterValidScans(station1Data);
@@ -294,7 +296,7 @@ class VolcanoTomography {
              maxColumn > 0;
     });
   }
-
+//======================================================================================
   /**
    * Main tomography reconstruction algorithm
    */
@@ -306,15 +308,17 @@ class VolcanoTomography {
     
     if (!spec1 || !spec2) return null;
 
-    // Get scan angles and columns (excluding edges and offset)
+    // Get scan angles and so2 columns (excluding edges and offset)
     const alpha1Full = spec1.angles;
     const alpha2Full = spec2.angles;
     const S1Full = spec1.so2Columns;
     const S2Full = spec2.so2Columns;
 
     // Find 180° reference point and filter data
-    const ref1Idx = alpha1Full.findIndex(a => a === 180);
-    const ref2Idx = alpha2Full.findIndex(a => a === 180);
+    const ref1Idx = alpha1Full.findIndex(
+    a => Math.abs(a - 180) < 0.1 );
+    const ref2Idx = alpha2Full.findIndex(
+    a => Math.abs(a - 180) < 0.1 );
 
     if (ref1Idx < 0 || ref2Idx < 0) return null;
 
@@ -329,147 +333,266 @@ class VolcanoTomography {
     const sorted2 = [...S2Raw].sort((a, b) => a - b);
     const offset2 = sorted2.slice(0, this.numberOffset).reduce((a, b) => a + b, 0) / this.numberOffset;
 
-    // Convert to SCD in flat geometry
+    // Project SCD onto a flat vertical plane
     const S1 = S1Raw.map(s => (s - offset1) * Math.sin(this.toRad(beta1)));
     const S2 = S2Raw.map(s => (s - offset2) * Math.sin(this.toRad(beta2)));
 
-    // Find indices where column > max/e
-    const maxS1 = Math.max(...S1);
-    const maxS2 = Math.max(...S2);
-    const threshold = 1 / Math.E;
+    // Trig helpers (degrees in/out)
+    const tand = x => Math.tan(this.toRad(x));
+    const sind = x => Math.sin(this.toRad(x));
+    const cosd = x => Math.cos(this.toRad(x));
+    const atand = x => this.toDeg(Math.atan(x));
 
-    const ind1 = S1
-      .map((s, i) => ({ val: s, idx: i }))
-      .filter(x => x.val > maxS1 * threshold)
-      .map(x => x.idx);
+    // Triangle geometry between stations
+    const VS1 = Math.sqrt(DX1 ** 2 + DY1 ** 2);
+    const VS2 = Math.sqrt(DX2 ** 2 + DY2 ** 2);
+    const angleV  = this.toDeg(Math.acos(Math.min(1, Math.max(-1, (VS1**2 + VS2**2 - S12**2) / (2*VS1*VS2)))));
+    const angleS1 = this.toDeg(Math.acos(Math.min(1, Math.max(-1, (VS1**2 + S12**2 - VS2**2) / (2*VS1*S12)))));
 
-    const ind2 = S2
+    // Estimate plume centre position (where so2 peaks) from barycenter angles
+    const pc1 = scan1.plumeCentre ?? 0;
+    const pc2 = scan2.plumeCentre ?? 0;
+
+    // Solve for S1P: horizontal perpendicular distance from the V→S1 axis to the plume centre.
+    // Both stations must triangulate to the same 3D plume altitude:
+    //   h = S1P / tan(pc1)            (from S1)
+    //   h = deltaH21 + S2P / tan(pc2) (from S2, corrected for altitude difference)
+    // Substituting S2P = VS2·tan(angleV − angleV1) with tan(angleV1) = S1P/VS1
+    // and applying the tan-subtraction formula gives the quadratic ax·S1P² + bx·S1P + cx = 0.
+    const ax = (tand(Math.abs(pc2)) / tand(Math.abs(pc1))) * tand(Math.abs(angleV));
+    const bx = (tand(Math.abs(pc2)) / tand(Math.abs(pc1))) * VS1
+             + deltaH21 * tand(Math.abs(pc2)) * tand(Math.abs(angleV)) + VS2;
+    const cx = deltaH21 * tand(Math.abs(pc2)) * VS1 - VS2 * VS1 * tand(Math.abs(angleV));
+
+    const disc = bx ** 2 - 4 * ax * cx;
+    if (disc < 0) return null;
+    const S1P = (-bx + Math.sqrt(disc)) / (2 * ax);
+
+    const angleV1 = atand(Math.abs(S1P / VS1));
+    const S2P     = VS2 * tand(Math.abs(angleV - angleV1));
+    const L1 = S12 - VS2 * sind(Math.abs(angleV - angleV1)) / sind(Math.abs(180 - angleS1 - angleV1));
+    const L2 = S12 - L1;
+
+    // Adjust the angular grid so the two stations share a common coordinate frame along the S1→S2 baseline.
+    const alphaB1 = alpha1.map(v => atand((L1 / S1P) * tand(v)));
+    const alphaB2 = alpha2.map(v => atand((L2 / S2P) * tand(v)));
+
+    // Rescale SO2 columns conserving total flux
+    const SB10 = S1.map((s, i) => s * (cosd(alpha1[i]) / cosd(alphaB1[i])));
+    const SB20 = S2.map((s, i) => s * (cosd(alpha2[i]) / cosd(alphaB2[i])));
+    const sumS1  = S1.reduce((a, b) => a + b, 0);
+    const sumS2  = S2.reduce((a, b) => a + b, 0);
+    const sumSB10 = SB10.reduce((a, b) => a + b, 0);
+    const sumSB20 = SB20.reduce((a, b) => a + b, 0);
+    const SB1 = SB10.map(s => s * (sumS1 / sumSB10));
+    const SB2 = SB20.map(s => s * (sumS2 / sumSB20));
+
+    // Threshold indices from corrected columns
+    const maxSB1 = Math.max(...SB1); //peak SCD in station 1's scan
+    const maxSB2 = Math.max(...SB2);
+    const threshold = 1 / Math.E; // cut off for low signal
+
+    const ind1 = SB1
+      .map((s, i) => ({ val: s, idx: i }))       // attach each SCD value to its angle index
+      .filter(x => x.val > maxSB1 * threshold)   // keep only angles above 1/e of the peak
+      .map(x => x.idx);  
+
+    const ind2 = SB2
       .map((s, i) => ({ val: s, idx: i }))
-      .filter(x => x.val > maxS2 * threshold)
+      .filter(x => x.val > maxSB2 * threshold)
       .map(x => x.idx);
 
     if (ind1.length < 2 || ind2.length < 2) return null;
 
-    const nRows1 = ind1.length - 1;
+    const nRows1 = ind1.length - 1; // 4 selected angles → 3 bands
     const nRows2 = ind2.length - 1;
 
-    // Outer-product reconstruction: concentration[m,n] = beam1[m] × beam2[n]
-    // O(nRows1 × nRows2) instead of O((nRows1 × nRows2)³) for least-squares
+    // Measured SCD at each angle band (ppm·m)
+    // b1[m] = representative SCD for band m (ppm·m)
     const b1 = new Array(nRows1);
     for (let m = 0; m < nRows1; m++) b1[m] = 0.5 * (S1[ind1[m]] + S1[ind1[m + 1]]);
     const b2 = new Array(nRows2);
     for (let n = 0; n < nRows2; n++) b2[n] = 0.5 * (S2[ind2[n]] + S2[ind2[n + 1]]);
-    const concentration = new Array(nRows1 * nRows2);
+
+    // Exact path lengths — named pL1/pL2 to avoid collision with the
+    // baseline-projection scalars L1/L2 defined above (lines 367-368).
+    const { L1: pL1, L2: pL2 } = this.computeExactPathLengths(
+      nRows1, nRows2, ind1, ind2, alphaB1, alphaB2, S12, deltaH21
+    );
+
+    // Reconstruction: normalized outer product in concentration space.
+    //
+    // The system has nRows1*nRows2 unknowns but only nRows1+nRows2 measurements,
+    // so it is massively underdetermined.  An unconstrained least-squares solve
+    // produces large oscillating positive/negative values; clamping negatives to
+    // zero then leaves edge peaks and a zero center — the unphysical artifact.
+    //
+    // The rank-1 reconstruction avoids this: for each station compute the average
+    // concentration along each ray (SCD / total path through all cells on that ray),
+    // then take the geometric mean from both stations.  This guarantees
+    // non-negativity, correct ppm units, and concentrates gas where both stations
+    // simultaneously see high SCD.
+    //
+    //   c1[m] = b1[m] / Σ_n pL1[m,n]   (ppm from station-1 ray m)
+    //   c2[n] = b2[n] / Σ_m pL2[m,n]   (ppm from station-2 ray n)
+    //   c[m,n] = √(c1[m] · c2[n])       (geometric mean, ppm, always ≥ 0)
+
+    const c1 = new Array(nRows1);
+    const totL1 = new Array(nRows1);
     for (let m = 0; m < nRows1; m++) {
-        for (let n = 0; n < nRows2; n++) {
-            concentration[m * nRows2 + n] = Math.max(0, b1[m] * b2[n]);
-        }
+      let totL = 0;
+      for (let n = 0; n < nRows2; n++) totL += pL1[m * nRows2 + n];
+      totL1[m] = totL;
+      c1[m] = totL > 0 ? Math.max(0, b1[m]) / totL : 0;
     }
 
-    // Calculate positions
+    const c2 = new Array(nRows2);
+    const totL2 = new Array(nRows2);
+    for (let n = 0; n < nRows2; n++) {
+      let totL = 0;
+      for (let m = 0; m < nRows1; m++) totL += pL2[m * nRows2 + n];
+      totL2[n] = totL;
+      c2[n] = totL > 0 ? Math.max(0, b2[n]) / totL : 0;
+    }
+
+    const concentration = new Array(nRows1 * nRows2);
+    for (let m = 0; m < nRows1; m++) {
+      for (let n = 0; n < nRows2; n++) {
+        concentration[m * nRows2 + n] = Math.sqrt(c1[m] * c2[n]);
+      }
+    }
+/*
+    // Log single-station concentrations so you can verify the scale and shape.
+    console.log('[Tomo] c1 per band (ppm):', c1.map(v => v.toFixed(4)));
+    console.log('[Tomo] c2 per band (ppm):', c2.map(v => v.toFixed(4))); */
+
+    // Calculate positions using corrected angles
     const positions = this.calculatePositions(
-      concentration, nRows1, nRows2, ind1, ind2, alpha1, alpha2,
+      concentration, nRows1, nRows2, ind1, ind2, alphaB1, alphaB2,
       S12, deltaH21, latVol, lonVol, altS1, utm1, utm2, utmVol
     );
 
+    const validation = this.validateReconstruction(concentration, nRows1, nRows2, b1, b2, pL1, pL2, c1, c2, totL1, totL2);
+
     return {
-      concentration: concentration,
-      lon: positions.lon,
-      lat: positions.lat,
-      alt: positions.alt,
-      gridDims: [nRows1, nRows2]
+      concentration,
+      lon:      positions.lon,
+      lat:      positions.lat,
+      alt:      positions.alt,
+      gridDims: [nRows1, nRows2],
+      validation
     };
   }
 
   /**
-   * Create sparse tomography matrix
+   * Exact path lengths (m) through each grid cell from each station's centre ray.
+   *
+   * Coordinate frame: station 1 at origin, station 2 at (S12, deltaH21).
+   * X = along baseline, Y = altitude.  A ray from station 1 at angle α₁
+   * satisfies X = Y·tan(α₁); a ray from station 2 satisfies
+   * (S12−X) = (Y−deltaH21)·tan(α₂).
+   *
+   * Cell (m,n) is bounded by station 1's rays [α1lo, α1hi] and station 2's
+   * rays [α2lo, α2hi].  The intersection altitude of two rays (ta1, ta2) is
+   *   Y = (S12 + deltaH21·ta2) / (ta1 + ta2)
+   *
+   * For the centre ray of station 1 at ta1, the entry/exit altitudes into
+   * cell (m,n) are found at ta2lo and ta2hi:
+   *   L1 = |Yexit − Yenter| · √(1 + ta1²)
+   * and symmetrically for station 2.
    */
-  createTomographyMatrix(nRows1, nRows2, nEqs, nCols, S1, S2, alpha1, alpha2, ind1, ind2) {
-    const Matrix = [];
-    for (let i = 0; i < nEqs; i++) {
-      Matrix.push(new Array(nCols).fill(0));
+  computeExactPathLengths(nRows1, nRows2, ind1, ind2, alphaB1, alphaB2, S12, deltaH21) {
+    const L1  = new Array(nRows1 * nRows2);
+    const L2  = new Array(nRows1 * nRows2);
+    const EPS = 1e-9;
+
+    for (let m = 0; m < nRows1; m++) {
+      const ta1 = Math.abs(Math.tan(this.toRad(
+        (alphaB1[ind1[m]] + alphaB1[ind1[m + 1]]) / 2
+      )));
+
+      for (let n = 0; n < nRows2; n++) {
+        const ta2lo = Math.abs(Math.tan(this.toRad(alphaB2[ind2[n]])));
+        const ta2hi = Math.abs(Math.tan(this.toRad(alphaB2[ind2[n + 1]])));
+
+        // Station 1 centre ray enters cell at ta2lo boundary, exits at ta2hi
+        const Ylo1 = ta1 + ta2lo > EPS ? (S12 + deltaH21 * ta2lo) / (ta1 + ta2lo) : 0;
+        const Yhi1 = ta1 + ta2hi > EPS ? (S12 + deltaH21 * ta2hi) / (ta1 + ta2hi) : 0;
+        L1[m * nRows2 + n] = Math.abs(Yhi1 - Ylo1) * Math.sqrt(1 + ta1 * ta1);
+
+        // Station 2 centre ray — bounded by station 1's rays [ta1lo, ta1hi]
+        const ta2  = Math.abs(Math.tan(this.toRad(
+          (alphaB2[ind2[n]] + alphaB2[ind2[n + 1]]) / 2
+        )));
+        const ta1lo = Math.abs(Math.tan(this.toRad(alphaB1[ind1[m]])));
+        const ta1hi = Math.abs(Math.tan(this.toRad(alphaB1[ind1[m + 1]])));
+        const K    = S12 + deltaH21 * ta2;
+        const Ylo2 = ta1lo + ta2 > EPS ? K / (ta1lo + ta2) : 0;
+        const Yhi2 = ta1hi + ta2 > EPS ? K / (ta1hi + ta2) : 0;
+        L2[m * nRows2 + n] = Math.abs(Yhi2 - Ylo2) * Math.sqrt(1 + ta2 * ta2);
+      }
     }
 
-    let row = 0;
+    return { L1, L2 };
+  }
+  //=============================================================================================
+  //COMPARISON
+  /**
+   * Forward-project the reconstructed concentration back to SCDs and compare
+   * with the original measurements.
+   * forward1[m] = Σ_n concentration[m,n] * L1[m,n]  should equal b1[m]
+   * forward2[n] = Σ_m concentration[m,n] * L2[m,n]  should equal b2[n]
+   * ratio ≈ 1 means the reconstruction is self-consistent.
+   */
+  validateReconstruction(concentration, nRows1, nRows2, b1, b2, L1, L2, c1, c2, totL1, totL2) {
+    const forward1 = new Array(nRows1).fill(0);
+    const forward2 = new Array(nRows2).fill(0);
 
-    // Rows for station 1
     for (let m = 0; m < nRows1; m++) {
       for (let n = 0; n < nRows2; n++) {
-        Matrix[row][m * nRows2 + n] = 1;
+        forward1[m] += concentration[m * nRows2 + n] * L1[m * nRows2 + n];
+        forward2[n] += concentration[m * nRows2 + n] * L2[m * nRows2 + n];
       }
-      row++;
     }
 
-    // Rows for station 2
-    for (let m = 0; m < nRows2; m++) {
-      for (let n = 0; n < nRows1; n++) {
-        Matrix[row][n * nRows2 + m] = 1;
-      }
-      row++;
-    }
+    const ratio1 = b1.map((s, m) => Math.abs(s) > 1e-10 ? forward1[m] / s : NaN);
+    const ratio2 = b2.map((s, n) => Math.abs(s) > 1e-10 ? forward2[n] / s : NaN);
 
-    // Smoothness constraints (third derivative)
-    for (let m = 0; m < nRows1 - 4; m++) {
-      Matrix[row][m] = -1;
-      Matrix[row][m + 1] = 3;
-      Matrix[row][m + 2] = -3;
-      Matrix[row][m + 3] = 1;
-      row++;
-    }
-
-    for (let m = 0; m < nRows2 - 4; m++) {
-      Matrix[row][m * nRows1] = -1;
-      Matrix[row][(m + 1) * nRows1] = 3;
-      Matrix[row][(m + 2) * nRows1] = -3;
-      Matrix[row][(m + 3) * nRows1] = 1;
-      row++;
-    }
-
-    return Matrix;
+    return { forward1, forward2, ratio1, ratio2, b1: [...b1], b2: [...b2], c1, c2, totL1, totL2 };
   }
+  //========================================================================================================
 
   /**
-   * Create measurement vector
-   */
-  createMeasurementVector(nRows1, nRows2, S1, S2, ind1, ind2) {
-    const nEqs = 2 * (nRows1 + nRows2) + (ind1.length - 4) + (ind2.length - 4);
-    const Cols = new Array(nEqs).fill(0);
-
-    let idx = 0;
-
-    // Measurements from station 1
-    for (let m = 0; m < nRows1; m++) {
-      Cols[idx++] = 0.5 * (S1[ind1[m]] + S1[ind1[m + 1]]);
-    }
-
-    // Measurements from station 2
-    for (let m = 0; m < nRows2; m++) {
-      Cols[idx++] = 0.5 * (S2[ind2[m]] + S2[ind2[m + 1]]);
-    }
-
-    // Smoothness = 0
-    while (idx < nEqs) {
-      Cols[idx++] = 0;
-    }
-
-    return Cols;
-  }
-
-  /**
-   * Solve Ax=b using least squares (QR decomposition via numerical methods)
+   * Solve the over-determined system A·x = b in the least-squares sense via
+   * the normal equations  (AᵀA)·x = Aᵀb,  solved with Gaussian elimination.
+   * A is (nMeas × nCells), b is length-nMeas; returns length-nCells vector x.
    */
   solveLeastSquares(A, b) {
-    const m = A.length;
-    const n = A[0].length;
+    const nMeas  = A.length;
+    const nCells = A[0].length;
 
-    // Normal equations: (A^T A) x = A^T b
-    const ATA = this.matrixMultiply(this.transpose(A), A);
-    const ATb = this.matrixMultiply(this.transpose(A), [b]);
+    // Build AᵀA (nCells×nCells) and Aᵀb (nCells) directly.
+    const ATA = Array.from({ length: nCells }, () => new Array(nCells).fill(0));
+    const ATb = new Array(nCells).fill(0);
 
-    // Solve using Gaussian elimination with partial pivoting
-    const x = this.gaussianElimination(ATA, ATb.map(row => row[0]));
-    
-    return x;
+    for (let i = 0; i < nMeas; i++) {
+      for (let j = 0; j < nCells; j++) {
+        if (A[i][j] === 0) continue;
+        ATb[j] += A[i][j] * b[i];
+        for (let k = j; k < nCells; k++) {
+          const v = A[i][j] * A[i][k];
+          ATA[j][k] += v;
+          if (k !== j) ATA[k][j] += v;
+        }
+      }
+    }
+
+    // Small ridge to guarantee invertibility when the system is near-singular.
+    const diagMax = Math.max(...ATA.map((row, i) => row[i]));
+    const ridge   = 1e-10 * (diagMax > 0 ? diagMax : 1);
+    for (let j = 0; j < nCells; j++) ATA[j][j] += ridge;
+
+    return this.gaussianElimination(ATA, ATb);
   }
 
   /**
@@ -705,10 +828,31 @@ export async function tomoInverse(data, deg2utm) {
                     beta1, beta2, altS1, latVol, lonVol, utmVol, utm1, utm2
                 );
                 if (!result) continue;
+
+                // Log validation for the very first frame: SCD = concentration × path
+                if (frames.length === 0 && result.validation) {
+                    const { forward1, b1: vb1, ratio1, forward2, b2: vb2, ratio2,
+                            c1, c2, totL1, totL2 } = result.validation;
+                    const fmt = x => isNaN(x) ? NaN : parseFloat(x.toFixed(4));
+                    const toRows = (b, conc, path, fwd, ratio) => b.map((_, i) => ({
+                        'SCD measured (ppm·m)':  fmt(b[i]),
+                        'concentration (ppm)':   fmt(conc[i]),
+                        'path (m)':              fmt(path[i]),
+                        'conc × path (ppm·m)':   fmt(fwd[i]),
+                        'ratio (expect ~1)':      fmt(ratio[i]),
+                    }));
+                    console.group('[Tomography validation] SCD = concentration × path');
+                    console.log('Station 1');
+                    console.table(toRows(vb1, c1, totL1, forward1, ratio1));
+                    console.log('Station 2');
+                    console.table(toRows(vb2, c2, totL2, forward2, ratio2));
+                    console.groupEnd();
+                }
+
                 const { concentration, lon, lat, alt, gridDims } = result;
                 const points = concentration.map((c, i) => {
                     const [latPutm, lonPutm] = deg2utm(lat[i], lon[i]);
-                    return { latPutm, lonPutm, altP: alt[i], Concentration: c };
+                    return { latPutm, lonPutm, lat: lat[i], lon: lon[i], altP: alt[i], Concentration: c };
                 });
                 frames.push({
                     points,

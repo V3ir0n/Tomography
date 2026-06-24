@@ -74,9 +74,10 @@ class Api {
     exportProcessedData(processedData) {
         for (const frame of processedData) {
             let lines = [];
-            lines.push([frame.size1, frame.size2].join(","));
+            lines.push(`grid_size1,grid_size2\n${frame.size1},${frame.size2}`);
+            lines.push("lon (deg),lat (deg),alt (m),Concentration");
             for (const p of frame.points) {
-                lines.push([p.lonPutm, p.latPutm, p.altP, p.Concentration].join(","))
+                lines.push([p.lon, p.lat, p.altP, p.Concentration].join(","))
             }
             // TODO: This filename is not formatted the same way as the output of the Matlab script,
             // so if you try to load the files the date parsing will fail.

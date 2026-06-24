@@ -810,4 +810,3 @@ function verifyGeometry(geometry) {
 // SOFTWARE.
 
 export { LoopSubdivision };
-//# sourceMappingURL=index.module.js.map

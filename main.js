@@ -414,6 +414,17 @@ async function onDataLoaded(data, processedData) {
         scene.add(line);
     }
 
+    new THREE.TextureLoader().load("resources/transmitter.png", texture => {
+        for (const instrumentPos of instPos) {
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+            const size = 300 * unitsPerMeter;
+            sprite.scale.set(size, size, 1);
+            sprite.position.copy(instrumentPos);
+            scene.add(sprite);
+        }
+        renderer.render(scene, camera);
+    });
+
     // If we don't have any preloaded processed data, calculate it
     // using tomoInverse
     if (processedData.length === 0) {
