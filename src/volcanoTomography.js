@@ -436,6 +436,7 @@ class VolcanoTomography {
       for (let m = 0; m < nRows1; m++) A[nRows1 + n][m * nRows2 + n] = pL2[m * nRows2 + n];
     }
 
+    debugger; // inspect A, bVec, pL1, pL2, b1, b2, nRows1, nRows2 here
     const concentration = this.solveMlem(A, bVec);
 
     // Calculate positions using corrected angles
