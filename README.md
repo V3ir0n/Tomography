@@ -35,3 +35,27 @@ We share programming code and results with the understanding that:
 4. A data management plan will be developed and updated.
 
 Complying with the above authorizes you to use, copy, modify, and publish project code and results.
+
+---------------------------------------------------------------------------------
+# Further help 
+
+## Basics
+HTML is used to design the skeleton of a webpage.
+CSS is used to change the appearance of the webpage.
+JavaScript is used to add interactive elements to the webpage.
+
+## Structure
+Resources contain geographical data in terrainMeshes
+Src contains help files for tomography inversion etc
+main.js executes the program
+
+## SO2 concentration frames
+The SO2 concentrations are calculated in a vertical plane between two stations. 
+When updateFrame runs the next frame appears and the old one is moved in the wind direction
+
+## Algoritm
+The concentrations are found by:
+1. Projecting the slant column densities, SCD, to a vertical plane between the two stations. 
+2. Constructing a grid of rays from each station
+3. Calculating the path lengths between intersecting points 
+4. Solving Ax=b where A contain path lengths, x the column density in grid cells and b are the SCDs
