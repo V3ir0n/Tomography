@@ -6,7 +6,7 @@ const volcanoList = [
     ["copahue", -37.8564, -71.1601, 2756],
     ["cotopaxi", -0.6845, -78.4370, 5800],
     ["el_reventador", -0.0810, -77.6584, 3510],
-    ["eyjafjallajokull", 63.633, -19.633, 1651]
+    ["eyjafjallajokull", 63.633, -19.633, 1651],
     ["fuego_de_colima", 19.5117, -103.6167, 3850],
     ["fuego_guatemala", 14.4742, -90.8806, 3763],
     ["galeras", 1.2214, -77.3592, 4080],
