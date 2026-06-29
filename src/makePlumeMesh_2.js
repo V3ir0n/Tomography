@@ -1,5 +1,5 @@
 /*
-Create plumes in sections between summit-concentration plane and between concentration planes.
+Creates plumes in sections between summit-concentration plane and between concentration planes.
 */
 import * as THREE from "three";
 
@@ -25,7 +25,7 @@ const SPRITES_PER_PT = 8;     // average sprites per hull point
 const MAX_SPRITES    = 2000;  // hard cap to avoid performance issues
 const MIN_SPRITES    = 400;   // minimum sprites even for sparse datasets
 const SLAB_FRACTION  = 0.15;  // exclusion zone half-thickness as fraction of BASE_SIZE
-const SUMMIT_WEIGHT  = 10;    // extra summit copies so that the plume is visible between summit and first plane
+const SUMMIT_WEIGHT  = 14;    // extra summit copies so that the plume is visible between summit and first plane
 
 // Cached smoke puff texture — created once, reused across all calls
 let smokeTexture = null;
@@ -40,7 +40,7 @@ function getSmokeTexture() {
     const ctx = canvas.getContext('2d');
     const c = size / 2;                            // center of the canvas
     const gradient = ctx.createRadialGradient(c, c, 0, c, c, c); // radial gradient from center to edge
-    gradient.addColorStop(0,   'rgba(255,255,255,1)');  // opaque white at center
+    gradient.addColorStop(0,   'rgba(195, 195, 195,0.8)');  // opaque white at center
     gradient.addColorStop(0.5, 'rgba(255,255,255,0.4)');// semi-transparent mid
     gradient.addColorStop(1,   'rgba(255,255,255,0)');  // fully transparent at edge
     ctx.fillStyle = gradient;
@@ -48,7 +48,6 @@ function getSmokeTexture() {
     smokeTexture = new THREE.CanvasTexture(canvas);
     return smokeTexture;
 }
-
 
 
 function makePlumeMesh(processedData, summitPos, velocity, dir, currentFrame, concentrationThreshold=0, maxTimeDiff=30) {
@@ -82,9 +81,8 @@ function makePlumeMesh(processedData, summitPos, velocity, dir, currentFrame, co
     const group = new THREE.Group();
     if (filteredPoints.length < 2) return group; // nothing to draw if too few points
 
-    // summitPos appears only once, but each frame contributes many points.
-    // Adding extra summit copies gives it proportional weight in random sampling,
-    // so sprite pairs/triples that cross the summit gap are generated often enough.
+    // summitPos appears only once.
+    // Adding extra summit copies is necessary to create more than just one dot of smoke
     const summitCopies = Math.max(1, Math.round((filteredPoints.length - 1) / SUMMIT_WEIGHT));
     for (let k = 0; k < summitCopies; k++) filteredPoints.push(summitPos);
 

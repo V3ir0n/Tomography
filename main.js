@@ -10,7 +10,7 @@ import {TomographicPlaneGeometry} from "./src/tomographicPlaneGeometry.js";
 import {GLTFLoader} from "./libs/threeAddons/GLTFLoader.js";
 import {GLTFExporter} from "./libs/threeAddons/GLTFExporter.js";
 import {RGBELoader} from './libs/threeAddons/RGBELoader.js';
-import {makePlumeMesh} from "./src/makePlumeMesh.js";
+import {makePlumeMesh} from "./src/makePlumeMesh_2.js";
 import {GUI} from "./libs/threeAddons/lil-gui.module.min.js"
 import {Api} from "./src/api.js";
 import {saveArrayBuffer} from "./src/utils.js";
@@ -374,6 +374,11 @@ async function onDataLoaded(data, processedData) {
     controls.minDistance = unitsPerMeter;
     controls.target.copy(summitPos);
     controls.update();
+
+    // Set initial camera position
+    camera.position.copy(summitPos).add(new THREE.Vector3(0, 5000 * unitsPerMeter, 8000 * unitsPerMeter));
+    controls.update();
+
 
     // Visualise the instruments
     const instPos = [];
