@@ -50,31 +50,31 @@ function getSmokeTexture() {
 }
 
 
-function makePlumeMesh(processedData, summitPos, velocity, dir, currentFrame, concentrationThreshold=0, maxTimeDiff=30) {
+function makePlumeMesh(processedData, summitPos, velocity, dir, currentFrame) {
     const filteredPoints = [summitPos]; // hull seed — starts with summit so plume is always anchored there
     const planeDepths = [];             // mean depth along dir for each frame, used to carve out sprite-free slabs
     const dirNorm = dir.clone().normalize(); // unit vector in wind direction, used for depth projections
     const margin = 1.001;              // tiny outward push to prevent z-fighting with the concentration planes
-    const maxDt = maxTimeDiff * 1000 * 60; // convert maxTimeDiff from minutes to milliseconds
 
     // Collect all concentration grid points from past frames, shifted to their current wind-drifted positions
     processedData.forEach((d, di) => {
         if (currentFrame >= di) {                               // only include frames up to the current one
             const dt = processedData[currentFrame].time - d.time; // time since this frame was captured (ms)
-            if (dt <= maxDt) {                                  // skip frames older than the time window
-                const drift = dir.clone().multiplyScalar(dt * velocity); // how far the gas has moved since measurement
-                let depthSum = 0, count = 0;
-                d.points.forEach((p, i) => {
-                    if (p.Concentration >= concentrationThreshold) {     // skip low-SO2 cells
-                        const pos = d.coordinates[i].clone().add(drift); // current world position of this gas parcel
-                        pos.multiplyScalar(margin);                      // nudge outward to avoid z-fighting
-                        filteredPoints.push(pos);
-                        depthSum += pos.dot(dirNorm);                    // accumulate depth for mean calculation
-                        count++;
-                    }
-                });
-                if (count > 0) planeDepths.push(depthSum / count); // store mean depth of this frame's plane
-            }
+            const drift = dir.clone().multiplyScalar(dt * velocity); // how far the gas has moved since measurement
+            // Use the same relative threshold as the concentration planes (1% of frame max)
+            const maxConc = Math.max(...d.points.map(p => p.Concentration));
+            const threshold = maxConc * 0.01;
+            let depthSum = 0, count = 0;
+            d.points.forEach((p, i) => {
+                if (p.Concentration > threshold) {                   // skip low-SO2 cells (same as plane filter)
+                    const pos = d.coordinates[i].clone().add(drift); // current world position of this gas parcel
+                    pos.multiplyScalar(margin);                      // nudge outward to avoid z-fighting
+                    filteredPoints.push(pos);
+                    depthSum += pos.dot(dirNorm);                    // accumulate depth for mean calculation
+                    count++;
+                }
+            });
+            if (count > 0) planeDepths.push(depthSum / count); // store mean depth of this frame's plane
         }
     });
 
