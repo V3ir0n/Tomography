@@ -55,7 +55,8 @@ const volcanoList = [
     ["rincon_de_la_vieja", 10.83, -85.3239, 1895],
     ["ruapehu", -39.28, 175.57, 2797],
     ["ticsani", -16.749454, -70.633172, 5382],
-    ["canlaon", 10.4096, 123.13, 2422]
+    ["canlaon", 10.4096, 123.13, 2422],
+    ["nevado_del_huila", 2.917, -76.033, 5364]
 ].map(l=>{
     const [volcano, lat, lon, alt] = l;
     return {volcano, lat, lon, alt};

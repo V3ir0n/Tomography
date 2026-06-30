@@ -53,7 +53,7 @@ main.js executes the program
 The SO2 concentrations are calculated in a vertical plane between two stations. 
 When updateFrame runs the next frame appears and the old one is moved in the wind direction
 
-## Algoritm
+## Algorithm
 The concentrations are found by:
 1. Projecting the slant column densities, SCD, to a vertical plane between the two stations. 
 2. Constructing a grid of rays from each station
