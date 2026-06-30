@@ -26,7 +26,7 @@
 	<body style="margin: 0">
 		<div id="fileUploadContainer" class="pico container-fluid" style="position: absolute;">
 			<article
-			data-tooltip="Browse and select a scan or traverse data file to load"
+			data-tooltip="Browse and select two files to load"
 			data-placement="bottom">
 				<fieldset class="grid">
 					<h1>Volcanic cloud viewer</h1>
@@ -34,8 +34,11 @@
 				<h2>Load examples</h2>
 
 				<fieldset class="grid">
+					<button id="clevelandExample" class="secondary">Cleveland</button>
+					<button id="nevadadelruizExample" class="secondary">Nevada del Ruiz</button>
+					<button id="merapiExample" class="secondary">Merapi</button>
 					<button id="turrialbaExample" class="secondary">Turrialba</button>
-					<button id="sabancayaExample" class="secondary">Sabancaya</button>
+					<button id="sabancayaExample" class="secondary">Sabancaya</button>				
 				</fieldset>
 
 				<h2>Load data</h2>
@@ -60,8 +63,7 @@
 				<label for="fileInput">Upload data here:
 					<input type="file" id="fileInput" accept=".txt, .csv" multiple/>
 				</label>
-				The visualisation needs Evaluation log text files and the csv files produced by the tomoInverse.m Matlab script.<br>
-				Use ctrl to select multiple files.
+				The visualisation needs two Evaluation log text files.
 
 			</article>
 			<article>When the visualisation has loaded, use keyboard arrows to step between timeframes.</article>
