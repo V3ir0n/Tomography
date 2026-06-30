@@ -133,13 +133,14 @@ function init() {
     document.getElementById("clevelandExample").onclick = () => {
         loadDataFromUrl([
             "matlab/cleveland/EvaluationLog_MAYP115019_2024.07.03.txt",
-            //"matlab/cleveland/EvaluationLog_MAYP115019_2024.07.04.txt",
             "matlab/cleveland/EvaluationLog_MAYP115415_2024.07.03.txt",
-            //"matlab/cleveland/EvaluationLog_MAYP115415_2024.07.04.txt",
-            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z.csv",
-            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(1).csv",
-            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(2).csv",
-            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(3).csv"
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0205.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0213.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0221.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0229.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0237.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0224_cleveland_20240703_0254.csv",
+            "matlab/cleveland/tomography_cleveland_20240703_0340_cleveland_20240703_0323.csv"
         ]);
     };
 
@@ -147,11 +148,9 @@ function init() {
         loadDataFromUrl([
             "matlab/merapi/EvaluationLog_2108113M1_2023.06.09.txt",
             "matlab/merapi/EvaluationLog_2108117M1_2023.06.09.txt",
-            //"matlab/merapi/EvaluationLog_2108124M1_2023.06.09.txt",
-            "matlab/merapi/tomography_merapi_2023-06-08T22_13_41.000Z_2023-06-08T23_37_40.000Z.csv",
-            "matlab/merapi/tomography_merapi_2023-06-08T22_22_55.000Z_2023-06-08T23_37_40.000Z.csv",
-            "matlab/merapi/tomography_merapi_2023-06-08T22_32_07.000Z_2023-06-08T23_37_40.000Z.csv",
-            "matlab/merapi/tomography_merapi_2023-06-09T03_49_00.000Z_2023-06-08T23_37_40.000Z.csv"
+            "matlab/merapi/tomography_merapi_20230609_0013_merapi_20230609_0137.csv",
+            "matlab/merapi/tomography_merapi_20230609_0022_merapi_20230609_0137.csv",
+            "matlab/merapi/tomography_merapi_20230609_0032_merapi_20230609_0137.csv"
         ]);
     };
 
