@@ -154,7 +154,7 @@ function init() {
         ]);
     };
 
-    document.getElementById("nevadadelruizExample").onclick = () => {
+    document.getElementById("nevadodelruizExample").onclick = () => {
         loadDataFromUrl([
             "matlab/nevado_del_ruiz/EvaluationLog_2011045M1_2024.08.31.txt",
             "matlab/nevado_del_ruiz/EvaluationLog_2011046M1_2024.08.31.txt",
