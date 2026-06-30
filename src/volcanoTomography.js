@@ -5,7 +5,7 @@ class VolcanoTomography {
   constructor(parameters = {}) {
     this.completenessLimit = parameters.completenessLimit || 0.9;
     this.baricenterLimit = parameters.baricenterLimit || 60;
-    this.timeDifferenceMin = parameters.timeDifferenceMin || 15;
+    this.timeDifferenceMin = parameters.timeDifferenceMin || 300;
     this.timeDifference = this.timeDifferenceMin / (24 * 60);
     this.numberOffset = parameters.numberOffset || 5;
     this.volcanoList = parameters.volcanoList || {};
