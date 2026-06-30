@@ -20,8 +20,6 @@ import {exportDomeVideo} from "./src/domeExport.js";
 // GUI parameters
 let params	= {
     assumedVelocity: 10, // Velocity in m/s
-    maxTimeDiff: 30, // Max time since current frame to include in geometry
-    concentrationThreshold: 0.0005,
     plumeVisible: true,
     pointsVisible: true,
     planeVisible: true,
@@ -40,8 +38,7 @@ render();
 const raycaster = new THREE.Raycaster();
 raycaster.params.Points.threshold = 0.001;
 
-
-// Initialise scene
+//--------------------------Initialise scene--------------------------------------
 function init() {
 
     // Setup renderer
@@ -133,6 +130,51 @@ function init() {
         ]);
     };
 
+    document.getElementById("clevelandExample").onclick = () => {
+        loadDataFromUrl([
+            "matlab/cleveland/EvaluationLog_MAYP115019_2024.07.03.txt",
+            //"matlab/cleveland/EvaluationLog_MAYP115019_2024.07.04.txt",
+            "matlab/cleveland/EvaluationLog_MAYP115415_2024.07.03.txt",
+            //"matlab/cleveland/EvaluationLog_MAYP115415_2024.07.04.txt",
+            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z.csv",
+            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(1).csv",
+            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(2).csv",
+            "matlab/cleveland/tomography_cleveland_2024-07-03T00_24_13.000Z_2024-07-03T00_37_52.000Z(3).csv"
+        ]);
+    };
+
+    document.getElementById("merapiExample").onclick = () => {
+        loadDataFromUrl([
+            "matlab/merapi/EvaluationLog_2108113M1_2023.06.09.txt",
+            "matlab/merapi/EvaluationLog_2108117M1_2023.06.09.txt",
+            //"matlab/merapi/EvaluationLog_2108124M1_2023.06.09.txt",
+            "matlab/merapi/tomography_merapi_2023-06-08T22_13_41.000Z_2023-06-08T23_37_40.000Z.csv",
+            "matlab/merapi/tomography_merapi_2023-06-08T22_22_55.000Z_2023-06-08T23_37_40.000Z.csv",
+            "matlab/merapi/tomography_merapi_2023-06-08T22_32_07.000Z_2023-06-08T23_37_40.000Z.csv",
+            "matlab/merapi/tomography_merapi_2023-06-09T03_49_00.000Z_2023-06-08T23_37_40.000Z.csv"
+        ]);
+    };
+
+    document.getElementById("nevadadelruizExample").onclick = () => {
+        loadDataFromUrl([
+            "matlab/nevado_del_ruiz/EvaluationLog_2011045M1_2024.08.31.txt",
+            "matlab/nevado_del_ruiz/EvaluationLog_2011046M1_2024.08.31.txt",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1452_nevado_del_ruiz_20240831_1455.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1607_nevado_del_ruiz_20240831_1557.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1607_nevado_del_ruiz_20240831_1607.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1607_nevado_del_ruiz_20240831_1617.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1632_nevado_del_ruiz_20240831_1617.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1632_nevado_del_ruiz_20240831_1624.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1632_nevado_del_ruiz_20240831_1638.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1632_nevado_del_ruiz_20240831_1645.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1807_nevado_del_ruiz_20240831_1755.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1807_nevado_del_ruiz_20240831_1805.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1807_nevado_del_ruiz_20240831_1815.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1927_nevado_del_ruiz_20240831_1918.csv",
+            "matlab/nevado_del_ruiz/tomography_nevado_del_ruiz_20240831_1927_nevado_del_ruiz_20240831_1928.csv"
+        ]);
+    };
+
 
     // Firefox might cashe the last files selected,
     // so this is a shorthand to press Enter to
@@ -152,6 +194,8 @@ function init() {
 
     render();
 }
+//------------------------------------------------------------------------------------------
+
 
 async function loadDataFromUrl(filePaths) {
         const data = [];
@@ -216,14 +260,23 @@ function setBackgroundVisibility(visible, url="resources/citrus_orchard_road_pur
 function parseProcessedData(text, filename) {
     const frame = {points: [], filename: filename};
 
-    // Parse date from filename format
-    const parseDate = (d, t) => new Date(
-        `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2,4)}`
-    );
-    // eslint-disable-next-line no-unused-vars
-    const [_0, _1, day1, time1, _2, day2, time2] = filename.split("_");
-    frame.date1 = parseDate(day1, time1);
-    frame.date2 = parseDate(day2, time2);
+    // Parse date from filename — two formats:
+    // Old: tomography_INST1_YYYYMMDD_HHMM_INST2_YYYYMMDD_HHMM
+    // New: tomography_VOLCANO_YYYY-MM-DDTHH_MM_SS.000Z_YYYY-MM-DDTHH_MM_SS.000Z
+    const isoMatch = filename.match(/(\d{4}-\d{2}-\d{2}T\d{2}_\d{2}).*?(\d{4}-\d{2}-\d{2}T\d{2}_\d{2})/);
+    if (isoMatch) {
+        frame.date1 = new Date(isoMatch[1].replace("_", ":"));
+        frame.date2 = new Date(isoMatch[2].replace("_", ":"));
+    } else {
+        const parseDate = (d, t) => new Date(
+            `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2,4)}`
+        );
+        const oldMatch = filename.match(/(\d{8})_(\d{4}).*?(\d{8})_(\d{4})/);
+        if (oldMatch) {
+            frame.date1 = parseDate(oldMatch[1], oldMatch[2]);
+            frame.date2 = parseDate(oldMatch[3], oldMatch[4]);
+        }
+    }
 
     // Calc average time
     frame.time = new Date((
@@ -238,6 +291,7 @@ function parseProcessedData(text, filename) {
             continue;
         }
         const values = line.split(",").map(v=>parseFloat(v));
+        if (isNaN(values[0])) continue; // skip text header lines
         if (values.length == 2) {
             [frame.size1, frame.size2] = values;
         } else {
@@ -305,7 +359,17 @@ function parseScans(text) {
         scans[i].spectralData = spectralData;
         i++;
     }
-    return scans;
+
+    // Deduplicate: NOVAC files store one block per fit window, so the same
+    // physical scan can appear multiple times with identical data. Keep only
+    // the first occurrence of each (date, starttime) pair.
+    const seen = new Set();
+    return scans.filter(s => {
+        const key = `${s.scanInfo.date}_${s.scanInfo.starttime}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 /**
@@ -565,8 +629,7 @@ async function onDataLoaded(data, processedData) {
             scene.remove(plumeMesh);
             if (params.plumeVisible) {
                 plumeMesh = makePlumeMesh(
-                    processedData, summitPos, velocity, dir, api.currentFrame,
-                    params.concentrationThreshold, params.maxTimeDiff
+                    processedData, summitPos, velocity, dir, api.currentFrame
                 );
                 scene.add(plumeMesh);
             }
@@ -588,8 +651,6 @@ async function onDataLoaded(data, processedData) {
     const plumeFolder = gui.addFolder('Plume');
     plumeFolder.add(params, 'plumeVisible').onChange(()=>api.updateFrame());
     plumeFolder.add(params, 'assumedVelocity').onChange(()=>api.updateFrame());
-    plumeFolder.add(params, 'maxTimeDiff').onChange(()=>api.updateFrame());
-    plumeFolder.add(params, 'concentrationThreshold').min(0).onChange(()=>api.updateFrame());
 
     const exportFolder = gui.addFolder("Export");
     exportFolder.add(params, "imageScaleFactor").min(1);
