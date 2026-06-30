@@ -72,17 +72,18 @@ class Api {
      * @param {*[]} processedData 
      */
     exportProcessedData(processedData) {
+        const pad = n => String(n).padStart(2, '0');
+        const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
         for (const frame of processedData) {
             let lines = [];
-            lines.push(`grid_size1,grid_size2\n${frame.size1},${frame.size2}`);
-            lines.push("lon (deg),lat (deg),alt (m),Concentration");
+            lines.push(`${frame.size1},${frame.size2}`);
             for (const p of frame.points) {
-                lines.push([p.lon, p.lat, p.altP, p.Concentration].join(","))
+                const lon = p.lon ?? p.lonPutm;
+                const lat = p.lat ?? p.latPutm;
+                lines.push([lon, lat, p.altP, p.Concentration].join(","));
             }
-            // TODO: This filename is not formatted the same way as the output of the Matlab script,
-            // so if you try to load the files the date parsing will fail.
-            // (but this took less time to implement)
-            const filename = `tomography_${this.volcanoName}_${frame.date1.toISOString()}_${frame.date2.toISOString()}.csv`;
+            const name = this.volcanoName;
+            const filename = `tomography_${name}_${fmtDate(frame.date1)}_${name}_${fmtDate(frame.date2)}.csv`;
             saveString(lines.join("\n"), filename);
         }
     }
