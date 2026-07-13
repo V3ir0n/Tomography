@@ -175,20 +175,6 @@ function init() {
     };
 
 
-    // ?example=<name> auto-loads the matching example button's dataset,
-    // used by the map's volcano popup "View loaded data" link.
-    const exampleButtonIds = {
-        cleveland: "clevelandExample",
-        nevado_del_ruiz: "nevadodelruizExample",
-        merapi: "merapiExample",
-        turrialba: "turrialbaExample",
-        sabancaya: "sabancayaExample",
-    };
-    const exampleParam = new URLSearchParams(window.location.search).get("example");
-    if (exampleParam && exampleButtonIds[exampleParam]) {
-        document.getElementById(exampleButtonIds[exampleParam])?.click();
-    }
-
     // Firefox might cashe the last files selected,
     // so this is a shorthand to press Enter to
     // load the directly.
