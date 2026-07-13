@@ -90,7 +90,7 @@ function init() {
                 alreadyProcessedData.push(frame);
             } else {
                 // Otherwise we should have the txt evaluation logs
-                const scans = parseScans(text);
+                const scans = await parseScans(text);
                 data.push(scans);
             }
         }
@@ -175,6 +175,20 @@ function init() {
     };
 
 
+    // ?example=<name> auto-loads the matching example button's dataset,
+    // used by the map's volcano popup "View loaded data" link.
+    const exampleButtonIds = {
+        cleveland: "clevelandExample",
+        nevado_del_ruiz: "nevadodelruizExample",
+        merapi: "merapiExample",
+        turrialba: "turrialbaExample",
+        sabancaya: "sabancayaExample",
+    };
+    const exampleParam = new URLSearchParams(window.location.search).get("example");
+    if (exampleParam && exampleButtonIds[exampleParam]) {
+        document.getElementById(exampleButtonIds[exampleParam])?.click();
+    }
+
     // Firefox might cashe the last files selected,
     // so this is a shorthand to press Enter to
     // load the directly.
@@ -215,7 +229,7 @@ async function loadDataFromUrl(filePaths) {
                 alreadyProcessedData.push(frame);
             } else {
                 // Otherwise we should have the txt evaluation logs
-                const scans = parseScans(text);
+                const scans = await parseScans(text);
                 data.push(scans);
             }
         }
@@ -301,15 +315,22 @@ function parseProcessedData(text, filename) {
     return frame;
 }
 
+// Hands control back to the browser (paint/input) between chunks of heavy
+// synchronous parsing, so large evaluation logs (10s of MB) don't block the
+// main thread long enough to trigger the browser's "Page Unresponsive" state.
+const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+const YIELD_EVERY = 200; // scans per pause
+
 /**
  * Parse evaluation logs
  * @param {string} text Evaluation logs
  * @returns {{points: any[]}}
  */
-function parseScans(text) {
+async function parseScans(text) {
     // Match spectral header and data
     const rInfo = /<scaninformation>(?<info>([\s\S])*?)<\/scaninformation>/gm;
     const scans = [];
+    let infoCount = 0;
     for (const match of text.matchAll(rInfo)) {
         const scanInfo = {};
         const info = match.groups.info.split("\n");
@@ -323,6 +344,7 @@ function parseScans(text) {
         scans.push({
             scanInfo: scanInfo
         });
+        if (++infoCount % YIELD_EVERY === 0) await yieldToMain();
     }
 
     // Match spectral header and data
@@ -357,6 +379,7 @@ function parseScans(text) {
         });
         scans[i].spectralData = spectralData;
         i++;
+        if (i % YIELD_EVERY === 0) await yieldToMain();
     }
 
     // Deduplicate: NOVAC files store one block per fit window, so the same
