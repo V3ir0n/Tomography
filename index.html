@@ -16,15 +16,29 @@
 			button {
 				margin: 0px; padding: 0px;
 			}
-			#backButton {
+			#topLeftBar {
 				position: fixed;
 				top: 10px;
-				right: 10px;
-				/* Above lil-gui's control panel (also fixed top-right, z-index: 1000),
-				   which is added to the DOM later and would otherwise win the tie
-				   and swallow clicks once a dataset finishes loading. */
+				left: 10px;
+				/* High z-index so nothing added later (e.g. lil-gui's control
+				   panel) can end up on top of it and swallow clicks. */
 				z-index: 100000;
+				display: flex;
+				align-items: center;
+				gap: 16px;
+			}
+			#backButton {
 				padding: 6px 14px;
+			}
+			footer small {
+				font-size: 0.7em;
+			}
+			#volcanoTitle {
+				/* Matches the main site's gold accent (theme.css --color-gold). */
+				color: #e0a500;
+				font-weight: 700;
+				font-size: 1.75rem;
+				pointer-events: none;
 			}
 		</style>
 
@@ -34,7 +48,10 @@
 
 	</head>
 	<body style="margin: 0">
-		<button id="backButton" class="secondary" onclick="history.back()">← Back</button>
+		<div id="topLeftBar">
+			<button id="backButton" class="secondary" onclick="history.back()">← Back</button>
+			<div id="volcanoTitle"></div>
+		</div>
 		<div id="fileUploadContainer" class="pico container-fluid" style="position: absolute;">
 			<article
 			data-tooltip="Browse and select two files to load"
@@ -105,5 +122,36 @@
 
 		<script src="libs/mathjs.js"></script>
 		<script type="module" src="main.js"></script>
+
+		<footer>
+			<div class="container">
+			<div style="display: flex; flex-direction: column; gap: 0.75em;">
+
+				<section>
+					<small>
+						<strong>About NOVAC</strong><br>
+						"About NOVAC: The Network for Observation of Volcanic and Atmospheric Change is a global collaboration between volcano observatories and research institutions that advances the monitoring and scientific understanding of volcanic emissions and their impacts."
+					</small>
+				</section>
+
+				<section>
+					<small>
+						<strong>Sustained By</strong><br>
+						"The joint effort of volcano observatories, Chalmers University of Technology, and the Volcano Disaster Assistance Program of the United States Geological Survey. Established through funding from the European Commission, the International Geoscience Programme of UNESCO/IUGS, the Swedish Space Agency, the Swedish Research Council and other funding sources over the years."
+					</small>
+				</section>
+
+				<section>
+					<small>
+						<strong>Credits</strong><br>
+						This page is funded by Chalmers University of Technology and developed within an <a href="https://infravis.se" target="_blank" rel="noopener">InfraVis</a>
+/Chalmers project including the following people: Santiago Arellano, Malin Lindgren and Bo Galle (Chalmers),
+Joakim Bohlin, Kristin Åkerlund, Jessica Cistakova, Tristan Bridge, Matteo Tomasini (InfraVis)
+					</small>
+				</section>
+
+			</div>
+			</div>
+		</footer>
 	</body>
 </html>

@@ -184,8 +184,16 @@ function init() {
         turrialba: "turrialbaExample",
         sabancaya: "sabancayaExample",
     };
+    const exampleDisplayNames = {
+        cleveland: "Cleveland",
+        nevado_del_ruiz: "Nevado del Ruiz",
+        merapi: "Merapi",
+        turrialba: "Turrialba",
+        sabancaya: "Sabancaya",
+    };
     const exampleParam = new URLSearchParams(window.location.search).get("example");
     if (exampleParam && exampleButtonIds[exampleParam]) {
+        document.getElementById("volcanoTitle").textContent = exampleDisplayNames[exampleParam] || "";
         document.getElementById(exampleButtonIds[exampleParam])?.click();
     }
 
