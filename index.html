@@ -30,6 +30,13 @@
 			#backButton {
 				padding: 6px 14px;
 			}
+			#uploadOwnDataBtn {
+				position: fixed;
+				top: 10px;
+				right: 10px;
+				z-index: 100000;
+				padding: 6px 14px;
+			}
 			footer small {
 				font-size: 0.7em;
 			}
@@ -52,6 +59,7 @@
 			<button id="backButton" class="secondary" onclick="history.back()">← Back</button>
 			<div id="volcanoTitle"></div>
 		</div>
+		<button id="uploadOwnDataBtn" class="secondary" onclick="location.href='index.html'">Upload own data</button>
 		<div id="fileUploadContainer" class="pico container-fluid" style="position: absolute;">
 			<article
 			data-tooltip="Browse and select two files to load"

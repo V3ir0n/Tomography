@@ -679,6 +679,19 @@ async function onDataLoaded(data, processedData) {
     params.exportData = ()=>{window.api.exportProcessedData(processedData)}
     exportFolder.add(params, "exportData").name("Export data");
 
+    // Push the "Upload own data" button below the GUI panel (its height
+    // varies with the controls above), instead of a guessed fixed offset.
+    // Deferred by a couple of frames since lil-gui opens folders via a
+    // requestAnimationFrame-driven CSS transition, so measuring right away
+    // can catch it before that settles to its final height.
+    const uploadBtn = document.getElementById('uploadOwnDataBtn');
+    if (uploadBtn) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            const rect = gui.domElement.getBoundingClientRect();
+            uploadBtn.style.top = `${rect.bottom + 10}px`;
+        }));
+    }
+
     // Setup keybindings
     window.addEventListener("keydown", (event) => {
         switch (event.code) {
