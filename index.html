@@ -16,6 +16,19 @@
 			button {
 				margin: 0px; padding: 0px;
 			}
+			/* .pico-prefixed to outrank Pico's own
+			   ".pico input:not([type=checkbox],[type=radio],[type=range],[type=file])"
+			   rule, which sets -moz-appearance: none (the wrong value to hide
+			   Firefox's native spinner -- only "textfield" does that) at a
+			   specificity our plain input[type="number"] rule couldn't beat. */
+			.pico input[type="number"]::-webkit-inner-spin-button,
+			.pico input[type="number"]::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+			.pico input[type="number"] {
+				-moz-appearance: textfield;
+			}
 			#topLeftBar {
 				position: fixed;
 				top: 10px;
@@ -36,6 +49,19 @@
 				right: 10px;
 				z-index: 100000;
 				padding: 6px 14px;
+			}
+			#uploadOwnDataHint {
+				position: fixed;
+				top: 46px;
+				right: 10px;
+				z-index: 100000;
+				max-width: 220px;
+				text-align: right;
+				/* Matches the main site's gold accent (theme.css --color-gold). */
+				color: #e0a500;
+				font-size: 0.85rem;
+				line-height: 1.4;
+				pointer-events: none;
 			}
 			footer small {
 				font-size: 0.7em;
@@ -60,6 +86,7 @@
 			<div id="volcanoTitle"></div>
 		</div>
 		<button id="uploadOwnDataBtn" class="secondary" onclick="location.href='index.html'">Upload own data</button>
+		<div id="uploadOwnDataHint">Select two EvaluationLog files from the same volcano and date.</div>
 		<div id="fileUploadContainer" class="pico container-fluid" style="position: absolute;">
 			<article
 			data-tooltip="Browse and select two files to load"
@@ -77,19 +104,22 @@
 					<button id="sabancayaExample" class="secondary">Sabancaya</button>				
 				</fieldset>
 
-				<h2>Load data</h2>
+				<h2>Choose the parameters for the tomographic inversion.</h2>
 				<fieldset class="grid">
 					<label>
-						Completeness limit
-						<input id="completenessLimit" type="number" value=0.9 step=0.1 placeholder="0.9"/>
+						Min. Plume completeness
+						<input id="completenessLimit" type="number" value=0.9 min="0.5" max="1" step="0.05" placeholder="0.9"/>
+						<input id="completenessLimitSlider" type="range" min="0.5" max="1" step="0.05" value="0.9"/>
 					</label>
 					<label>
-						Baricenter limit
-						<input id="baricenterLimit" type="number" value=60 placeholder="60"/>
+						Max Plume Centre (deg)
+						<input id="baricenterLimit" type="number" value=60 min="50" max="70" step="1" placeholder="60"/>
+						<input id="baricenterLimitSlider" type="range" min="50" max="70" step="1" value="60"/>
 					</label>
 					<label>
-						Time difference (minutes)
-						<input id="timeDifferenceMin" type="number" value=15 placeholder="15"/>
+						Max. Time Difference (min)
+						<input id="timeDifferenceMin" type="number" value=15 min="5" max="30" step="1" placeholder="15"/>
+						<input id="timeDifferenceMinSlider" type="range" min="5" max="30" step="1" value="15"/>
 					</label>
 				</fieldset>
 				<small>

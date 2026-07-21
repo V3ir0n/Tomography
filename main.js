@@ -73,6 +73,23 @@ function init() {
     controls.zoomToCursor = true;
     controls.addEventListener("change", render);
 
+    // Keep each number input and its slider in sync with each other;
+    // tomoInverse/volcanoTomography read the number inputs' values directly.
+    const completenessNum = document.getElementById("completenessLimit");
+    const completenessSlider = document.getElementById("completenessLimitSlider");
+    completenessNum.addEventListener("input", () => completenessSlider.value = completenessNum.value);
+    completenessSlider.addEventListener("input", () => completenessNum.value = completenessSlider.value);
+
+    const baricenterNum = document.getElementById("baricenterLimit");
+    const baricenterSlider = document.getElementById("baricenterLimitSlider");
+    baricenterNum.addEventListener("input", () => baricenterSlider.value = baricenterNum.value);
+    baricenterSlider.addEventListener("input", () => baricenterNum.value = baricenterSlider.value);
+
+    const timeDiffNum = document.getElementById("timeDifferenceMin");
+    const timeDiffSlider = document.getElementById("timeDifferenceMinSlider");
+    timeDiffNum.addEventListener("input", () => timeDiffSlider.value = timeDiffNum.value);
+    timeDiffSlider.addEventListener("input", () => timeDiffNum.value = timeDiffSlider.value);
+
     // Load data when file is uploaded
     const fileInput = document.getElementById("fileInput");
     const loadFromFiles = async () => {
@@ -685,10 +702,14 @@ async function onDataLoaded(data, processedData) {
     // requestAnimationFrame-driven CSS transition, so measuring right away
     // can catch it before that settles to its final height.
     const uploadBtn = document.getElementById('uploadOwnDataBtn');
+    const uploadHint = document.getElementById('uploadOwnDataHint');
     if (uploadBtn) {
         requestAnimationFrame(() => requestAnimationFrame(() => {
             const rect = gui.domElement.getBoundingClientRect();
             uploadBtn.style.top = `${rect.bottom + 10}px`;
+            if (uploadHint) {
+                uploadHint.style.top = `${rect.bottom + 10 + uploadBtn.getBoundingClientRect().height + 10}px`;
+            }
         }));
     }
 
