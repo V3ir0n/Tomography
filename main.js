@@ -502,14 +502,63 @@ async function onDataLoaded(data, processedData) {
         const instrumentPos = toSceneCoords(instrumentLatLng, scanInfo.alt, proj);
         instPos.push(instrumentPos);
 
-        // Add a cuboid to mark the instrument position
-        const instrumentGeometry = new THREE.BoxGeometry(1.5, 1, 3);
-        const instrumentMaterial = new THREE.MeshStandardMaterial({color: 0xffffff});
-        const cube = new THREE.Mesh(instrumentGeometry, instrumentMaterial);
-        cube.scale.multiplyScalar(50 * unitsPerMeter);
-        cube.position.copy(instrumentPos);
-        cube.lookAt(summitPos);
-        scene.add(cube);
+        // Add an instrument marker: mast + telescope + box + antenna, matching
+        // the Remote sensing 3D view's station design. lookAt() below points
+        // local -Z at the summit, so (unlike that view's +Z-forward
+        // convention) the volcano-facing parts sit on -Z and the parts meant
+        // to face away sit on +Z.
+        const instrumentMaterial = new THREE.MeshStandardMaterial({color: 0x4d4d4d}); // mast/antenna: dark gray
+        const boxMaterial = new THREE.MeshBasicMaterial({color: 0x3d7ea6}); // box: lighter blue, for visibility
+        const telescopeMaterial = new THREE.MeshStandardMaterial({color: 0x1a1a1a}); // telescope: black
+        const instrumentGroup = new THREE.Group();
+        const bs = 1;
+        const mastH = bs * 3;
+        const mastR = bs * 0.12;
+
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(mastR, mastR, mastH, 8), instrumentMaterial);
+        mast.position.y = mastH / 2;
+        instrumentGroup.add(mast);
+
+        const telescopeLen = bs * 1.4;
+        const telescope = new THREE.Mesh(
+            new THREE.CylinderGeometry(bs * 0.18, bs * 0.18, telescopeLen, 12),
+            telescopeMaterial
+        );
+        telescope.rotation.x = Math.PI / 2; // axis along local Z
+        telescope.position.set(0, mastH, telescopeLen * 0.3); // bulk on +Z, away from the volcano
+        instrumentGroup.add(telescope);
+
+        const boxDepth = bs * 0.35;
+        const mastBox = new THREE.Mesh(
+            new THREE.BoxGeometry(bs * 0.6, bs * 0.5, boxDepth),
+            boxMaterial
+        );
+        mastBox.position.set(0, mastH / 3, -(mastR + boxDepth / 2)); // facing the volcano, on -Z
+        instrumentGroup.add(mastBox);
+
+        const antennaLen = bs * 0.9;
+        const antenna = new THREE.Mesh(
+            new THREE.CylinderGeometry(bs * 0.03, bs * 0.03, antennaLen, 6),
+            telescopeMaterial
+        );
+        antenna.rotation.z = Math.PI / 2; // axis along local X, horizontal, sideways
+        antenna.position.set(mastR + antennaLen / 2, mastH * 0.65, 0);
+        instrumentGroup.add(antenna);
+
+        const elementH = bs * 0.3;
+        [0.1, 0.25, 0.4, 0.55, 0.7, 0.85].forEach(f => {
+            const el = new THREE.Mesh(
+                new THREE.CylinderGeometry(bs * 0.015, bs * 0.015, elementH, 6),
+                telescopeMaterial
+            );
+            el.position.set(mastR + antennaLen * f, mastH * 0.65, 0);
+            instrumentGroup.add(el);
+        });
+
+        instrumentGroup.scale.multiplyScalar(50 * unitsPerMeter);
+        instrumentGroup.position.copy(instrumentPos);
+        instrumentGroup.lookAt(summitPos);
+        scene.add(instrumentGroup);
 
         // Add a cone to mark the instrument scanning volume
         const height = 1;
