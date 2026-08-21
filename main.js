@@ -575,7 +575,12 @@ async function onDataLoaded(data, processedData) {
         }));
         line.scale.multiplyScalar(instrumentPos.distanceTo(summitPos));
         line.position.copy(instrumentPos);
-        line.lookAt(new THREE.Vector3(0, instrumentPos.y, 0));
+        // Tip sits at the telescope's height, matching the Remote sensing
+        // 3D view, instead of the ground. mastH is in the instrument
+        // group's own (pre-scale) units, so convert it the same way that
+        // group's scale does (50 * unitsPerMeter) before adding it here.
+        line.position.y += mastH * 50 * unitsPerMeter;
+        line.lookAt(new THREE.Vector3(0, line.position.y, 0));
         scene.add(line);
     }
 
